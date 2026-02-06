@@ -28,7 +28,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- ASSETS ---
-// Using "accesories" (one c) to match your folder structure screenshot
 const SHOP_ITEMS = [
   // Headware
   { id: 'baseball_cap', name: 'Baseball Cap', type: 'headware', price: 15, thumb: '/assets/headware/baseball_cap_tn.png', overlay: '/assets/headware/baseball_cap.png' },
@@ -63,7 +62,6 @@ const INITIAL_TASKS = [
   { id: 'init_1', title: "Join the Team", type: "Onboarding", reward_hay: 50, reward_sugar: 2, reward_stat: "stamina", isMain: false }
 ];
 
-// UPDATED TOWN STRUCTURE
 const INITIAL_TOWN = [
   { id: 'chat_barn', name: 'Chat Barn', cost: 300, current: 0, icon: '💬', description: 'Unlocks Team Chat', unlocked: false },
   { id: 'salon', name: 'The Mane Salon', cost: 500, current: 0, icon: '✂️', description: 'Unlocks Coat Colors', unlocked: false },
@@ -156,11 +154,9 @@ export default function StableGoals() {
     if (!townSnap.exists()) {
       await setDoc(townRef, { buildings: INITIAL_TOWN, stableName: stableName });
     } else {
-      // FORCE UPDATE TOWN STRUCTURE (Remove old buildings like Library/Gym, Add new ones)
       const currentBuildings = townSnap.data().buildings || [];
       const mergedBuildings = INITIAL_TOWN.map(newB => {
         const existing = currentBuildings.find(b => b.id === newB.id);
-        // Preserve state if existing, otherwise use new definition
         return existing ? { ...newB, current: existing.current, unlocked: existing.unlocked } : newB;
       });
       await updateDoc(townRef, { buildings: mergedBuildings });
@@ -179,13 +175,8 @@ export default function StableGoals() {
     setSession(sessionData);
     localStorage.setItem('stable_goals_creds', JSON.stringify({ name, teamCode: safeCode }));
     
-    // Daily Check-in Logic
-    if (role !== 'manager') {
-      const today = new Date().toDateString();
-      const lastCheckIn = userSnap.data()?.lastCheckIn;
-      if (lastCheckIn !== today) {
-        setShowWellness(true);
-      }
+    if ((!userSnap.exists() || !userSnap.data().stats?.mood) && role !== 'manager') {
+      setShowWellness(true);
     }
     setLoading(false);
   };
@@ -639,7 +630,12 @@ export default function StableGoals() {
                            </div>
                            <GameButton onClick={() => contributeToTown(b.id)} color="blue" className="w-full mt-2 text-sm">Contribute 50 Hay</GameButton>
                         </div>
-                      ) : <GameButton onClick={() => b.id === 'bus' ? setView('team') : b.id === 'salon' ? setView('salon') : null} color="white" className="w-full mt-4 text-sm relative z-10">Enter Building</GameButton>}
+                      ) : <GameButton onClick={() => {
+                          if (b.id === 'bus') setView('team');
+                          else if (b.id === 'salon') setView('salon');
+                          else if (b.id === 'gift_shop') setView('team');
+                          else if (b.id === 'racetrack') { setRaceMode(true); startRace(); }
+                      }} color="white" className="w-full mt-4 text-sm relative z-10">{b.id === 'racetrack' ? 'Practice Race' : 'Enter Building'}</GameButton>}
                     </div>
                   ))}
               </div>
@@ -739,6 +735,56 @@ export default function StableGoals() {
             <div className="grid grid-cols-2 gap-4 mt-6">{['fire', 'happy', 'ok', 'tired'].map(m => <button key={m} onClick={() => handleWellness(m)} className="p-6 bg-slate-50 rounded-[2rem] border-b-8 border-slate-200 hover:bg-sky-50 text-2xl capitalize font-bold">{m}</button>)}</div>
           </div>
         </div>
+      )}
+
+      {/* 2. Race Mode Overlay (Jockey) */}
+      {raceMode && (
+          <div className="fixed inset-0 z-50 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center p-8">
+             <div className="bg-slate-900 w-full max-w-4xl rounded-[2.5rem] p-8 shadow-2xl relative overflow-hidden min-h-[60vh] border-4 border-slate-700">
+                <div className="flex justify-between items-center mb-8 relative z-10">
+                   <h2 className="text-4xl font-black italic tracking-tighter text-amber-400">Practice Derby</h2>
+                   <button onClick={() => { setRaceMode(false); setRaceState(null); }} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold backdrop-blur text-white">Exit</button>
+                </div>
+                
+                <div className="space-y-6 relative z-10">
+                   {teamMembers.filter(m => m.role !== 'manager').map((r, i) => (
+                     <div key={r.id} className="relative">
+                        <div className="flex items-center gap-4 mb-1">
+                           <div className="w-8 text-right font-bold text-slate-500">{i+1}</div>
+                           <div className="w-10 h-10 bg-white rounded-lg overflow-hidden relative border-2 border-slate-700">
+                              <img src={`/assets/horses/${r.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
+                           </div>
+                           <div className="font-bold text-sm text-slate-300 w-24 truncate">{r.name}</div>
+                           
+                           {/* Track Lane */}
+                           <div className="flex-1 h-12 bg-slate-800 rounded-xl relative overflow-hidden border border-slate-700">
+                              <div className="absolute top-0 bottom-0 w-[2px] bg-slate-600 left-[10%]"></div>
+                              <div className="absolute top-0 bottom-0 w-[2px] bg-slate-600 left-[50%]"></div>
+                              <div className="absolute top-0 bottom-0 w-[4px] bg-amber-500/50 right-0"></div> {/* Finish Line */}
+                              
+                              {/* Horse Runner */}
+                              <div 
+                                 className="absolute top-1/2 transform -translate-y-1/2 transition-all duration-300 ease-linear text-3xl"
+                                 style={{ left: `calc(${racePositions[r.id] || 0}% - 30px)` }}
+                              >
+                                 🐎
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                   ))}
+                </div>
+                {raceState === 'finished' && (
+                   <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+                      <div className="bg-white text-slate-900 p-8 rounded-3xl text-center shadow-2xl animate-in zoom-in">
+                         <h3 className="text-3xl font-black mb-2 text-amber-500">Race Finished!</h3>
+                         <p className="font-bold">This was a practice run.</p>
+                         <button onClick={() => setRaceMode(false)} className="mt-6 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold">Return to Stable</button>
+                      </div>
+                   </div>
+                )}
+             </div>
+          </div>
       )}
 
       {/* Toast Notification */}
