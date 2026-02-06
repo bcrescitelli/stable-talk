@@ -58,8 +58,9 @@ const COAT_COLORS = [
   { id: 'blue', name: 'Mystic Blue', price: 250, img: '/assets/horses/blue.png' },
 ];
 
+// Lowered sugar rewards as requested
 const INITIAL_TASKS = [
-  { id: 'init_1', title: "Join the Team", type: "Onboarding", reward_hay: 50, reward_sugar: 10, reward_stat: "stamina", isMain: false }
+  { id: 'init_1', title: "Join the Team", type: "Onboarding", reward_hay: 50, reward_sugar: 2, reward_stat: "stamina", isMain: false }
 ];
 
 const INITIAL_TOWN = [
@@ -71,7 +72,7 @@ const INITIAL_TOWN = [
 ];
 
 const DEFAULT_USER_STATE = {
-  currency: { sugar: 50, hay: 100 },
+  currency: { sugar: 15, hay: 100 }, // Lowered starting sugar
   stats: { speed: 10, stamina: 10, mood: null },
   inventory: [], ownedCoats: ['white'], horseColor: 'white',
   equipped: { headware: null, neckware: null, shoes: null, accessories: null },
@@ -282,7 +283,7 @@ export default function StableGoals() {
       const senderRef = doc(db, "users", session.docId);
       const receiverRef = doc(db, "users", targetUserId);
       await updateDoc(senderRef, { "currency.sugar": increment(-10) });
-      await updateDoc(receiverRef, { "currency.hay": increment(50), "currency.sugar": increment(10) });
+      await updateDoc(receiverRef, { "currency.hay": increment(50), "currency.sugar": increment(2) }); // Adjusted gift reward
       showToast("Gift Sent! (-10 Sugar)");
     } else {
       showToast("Need 10 Sugar to send gift", "error");
@@ -293,7 +294,7 @@ export default function StableGoals() {
     const userRef = doc(db, "users", session.docId);
     await updateDoc(userRef, { 
       "stats.mood": mood, 
-      "currency.sugar": increment(10),
+      "currency.sugar": increment(2), // Lowered wellness sugar reward
       "currency.hay": increment(20),
       "stats.stamina": increment(1),
       "lastCheckIn": new Date().toDateString()
@@ -310,12 +311,13 @@ export default function StableGoals() {
     const sub2 = d.get('sub2');
     const sub3 = d.get('sub3');
 
+    // ADJUSTED REWARDS: Main = 5 Sugar, Sub = 2 Sugar
     const newTasks = [
-      { id: Date.now() + '_main', title: mainTitle, type: 'Main Focus', reward_hay: 200, reward_sugar: 50, reward_stat: 'stamina', isMain: true }
+      { id: Date.now() + '_main', title: mainTitle, type: 'Main Focus', reward_hay: 200, reward_sugar: 5, reward_stat: 'stamina', isMain: true }
     ];
-    if (sub1) newTasks.push({ id: Date.now() + '_s1', title: sub1, type: 'Subtask', reward_hay: 50, reward_sugar: 10, reward_stat: 'speed', isMain: false });
-    if (sub2) newTasks.push({ id: Date.now() + '_s2', title: sub2, type: 'Subtask', reward_hay: 50, reward_sugar: 10, reward_stat: 'speed', isMain: false });
-    if (sub3) newTasks.push({ id: Date.now() + '_s3', title: sub3, type: 'Subtask', reward_hay: 50, reward_sugar: 10, reward_stat: 'speed', isMain: false });
+    if (sub1) newTasks.push({ id: Date.now() + '_s1', title: sub1, type: 'Subtask', reward_hay: 50, reward_sugar: 2, reward_stat: 'speed', isMain: false });
+    if (sub2) newTasks.push({ id: Date.now() + '_s2', title: sub2, type: 'Subtask', reward_hay: 50, reward_sugar: 2, reward_stat: 'speed', isMain: false });
+    if (sub3) newTasks.push({ id: Date.now() + '_s3', title: sub3, type: 'Subtask', reward_hay: 50, reward_sugar: 2, reward_stat: 'speed', isMain: false });
 
     const memberRef = doc(db, "users", selectedMember.id);
     const currentTasks = selectedMember.activeTasks || [];
@@ -536,12 +538,12 @@ export default function StableGoals() {
                 
                 <form onSubmit={assignGoal} className="space-y-4">
                    <div>
-                      <label className="text-xs font-bold text-emerald-600 uppercase ml-2 mb-1 block">Main Focus (+200 Hay, +50 Sugar)</label>
+                      <label className="text-xs font-bold text-emerald-600 uppercase ml-2 mb-1 block">Main Focus (+200 Hay, +5 Sugar)</label>
                       <input name="mainGoal" placeholder="e.g. Finish Q3 Report" className="w-full bg-emerald-50 border-2 border-emerald-100 rounded-xl px-4 py-3 font-bold text-emerald-900 placeholder-emerald-300 focus:outline-none focus:border-emerald-400" required />
                    </div>
                    
                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase ml-2 block">Subtasks (+50 Hay, +10 Sugar)</label>
+                      <label className="text-xs font-bold text-slate-400 uppercase ml-2 block">Subtasks (+50 Hay, +2 Sugar)</label>
                       <input name="sub1" placeholder="Subtask 1" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
                       <input name="sub2" placeholder="Subtask 2" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
                       <input name="sub3" placeholder="Subtask 3" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
@@ -586,8 +588,8 @@ export default function StableGoals() {
               {getEquippedOverlay(userData, 'accessories') && <img src={getEquippedOverlay(userData, 'accessories')} className="absolute w-full h-full object-contain z-50" />}
               {userData.digestingTask && <div className="absolute -bottom-10 bg-white px-6 py-3 rounded-2xl shadow-xl border-b-4 border-emerald-200 flex items-center gap-3 z-50 animate-bounce"><Clock size={20} className="text-emerald-500" /><span className="font-bold text-slate-700">Digesting...</span></div>}
               
-              {/* Stats Overlay */}
-              <div className="absolute -top-10 left-0 bg-white/90 backdrop-blur-sm p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 w-24">
+              {/* Stats Overlay (Moved to top-left and z-60 to be on top) */}
+              <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 w-24 z-[60]">
                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Health</div>
                  <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                     <div className="h-full bg-rose-500" style={{ width: `${Math.min(userData.stats.stamina * 5, 100)}%` }}></div>
@@ -688,12 +690,28 @@ export default function StableGoals() {
                  <div className="grid grid-cols-3 gap-4">
                   {SHOP_ITEMS.filter(i => shopFilter === 'all' || i.type === shopFilter).map(item => {
                     const isOwned = userData.inventory?.includes(item.id);
+                    const isEquipped = userData.equipped[item.type] === item.id;
                     return (
-                      <button key={item.id} onClick={() => isOwned ? equipItem(item) : buyItem(item)} className={`p-4 rounded-[2rem] border-b-8 flex flex-col items-center text-center bg-white border-slate-200 ${userData.equipped[item.type] === item.id ? 'ring-4 ring-rose-200' : ''}`}>
+                      <div key={item.id} className={`p-4 rounded-[2rem] border-b-8 flex flex-col items-center text-center bg-white border-slate-200 ${isEquipped ? 'ring-4 ring-rose-200' : ''}`}>
                         <img src={item.thumb} className="w-16 h-16 object-contain mb-2" />
                         <div className="font-bold text-xs text-slate-700">{item.name}</div>
-                        <div className={`mt-2 text-[10px] font-black px-2 py-1 rounded uppercase ${isOwned ? 'bg-slate-100 text-slate-400' : 'bg-pink-500 text-white'}`}>{isOwned ? 'Own' : item.price}</div>
-                      </button>
+                        
+                        {isOwned ? (
+                           <button 
+                              onClick={() => equipItem(item)}
+                              className={`mt-2 text-[10px] font-black px-4 py-2 rounded-xl uppercase w-full transition-colors ${isEquipped ? 'bg-slate-100 text-slate-400' : 'bg-rose-500 text-white hover:bg-rose-600 shadow-lg shadow-rose-200'}`}
+                           >
+                              {isEquipped ? 'Equipped' : 'Wear'}
+                           </button>
+                        ) : (
+                           <button 
+                              onClick={() => buyItem(item)}
+                              className="mt-2 text-[10px] font-black px-4 py-2 rounded-xl uppercase w-full bg-pink-500 text-white hover:bg-pink-600 shadow-lg shadow-pink-200 transition-colors"
+                           >
+                              {item.price} 🍬
+                           </button>
+                        )}
+                      </div>
                     )
                   })}
                  </div>
@@ -702,13 +720,31 @@ export default function StableGoals() {
             
             {view === 'salon' && (
               <div className="grid grid-cols-3 gap-4">
-                {townData.buildings.find(b => b.id === 'salon')?.unlocked ? COAT_COLORS.map(coat => (
-                   <button key={coat.id} onClick={() => userData.ownedCoats.includes(coat.id) ? equipCoat(coat.id) : buyCoat(coat)} className="p-4 rounded-[2rem] border-b-8 flex flex-col items-center bg-white border-slate-200">
-                      <img src={coat.img} className="w-16 h-16 object-contain mb-2" />
-                      <div className="font-bold text-xs">{coat.name}</div>
-                      <div className={`mt-2 text-[10px] font-black px-2 py-1 rounded uppercase ${userData.ownedCoats.includes(coat.id) ? 'bg-slate-100 text-slate-400' : 'bg-purple-500 text-white'}`}>{userData.ownedCoats.includes(coat.id) ? 'Own' : coat.price}</div>
-                   </button>
-                )) : <div className="col-span-3 text-center p-10 text-slate-400 font-bold">Salon Locked. Build it in Town!</div>}
+                {townData.buildings.find(b => b.id === 'salon')?.unlocked ? COAT_COLORS.map(coat => {
+                   const isOwned = userData.ownedCoats.includes(coat.id);
+                   const isEquipped = userData.horseColor === coat.id;
+                   return (
+                      <div key={coat.id} className={`p-4 rounded-[2rem] border-b-8 flex flex-col items-center bg-white border-slate-200 ${isEquipped ? 'ring-4 ring-purple-200' : ''}`}>
+                          <img src={coat.img} className="w-16 h-16 object-contain mb-2" />
+                          <div className="font-bold text-xs">{coat.name}</div>
+                          {isOwned ? (
+                             <button 
+                                onClick={() => equipCoat(coat.id)}
+                                className={`mt-2 text-[10px] font-black px-4 py-2 rounded-xl uppercase w-full transition-colors ${isEquipped ? 'bg-slate-100 text-slate-400' : 'bg-purple-500 text-white hover:bg-purple-600 shadow-lg shadow-purple-200'}`}
+                             >
+                                {isEquipped ? 'Equipped' : 'Wear'}
+                             </button>
+                          ) : (
+                             <button 
+                                onClick={() => buyCoat(coat)}
+                                className="mt-2 text-[10px] font-black px-4 py-2 rounded-xl uppercase w-full bg-purple-500 text-white hover:bg-purple-600 shadow-lg shadow-purple-200 transition-colors"
+                             >
+                                {coat.price} 🍬
+                             </button>
+                          )}
+                      </div>
+                   );
+                }) : <div className="col-span-3 text-center p-10 text-slate-400 font-bold">Salon Locked. Build it in Town!</div>}
               </div>
             )}
           </div>
