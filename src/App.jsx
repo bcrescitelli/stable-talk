@@ -4,7 +4,7 @@ import {
   Clock, CheckCircle, Zap, LogOut, Scissors, 
   Users, Activity, TrendingUp, AlertCircle,
   BookOpen, Dumbbell, Flag, PlusCircle, Play,
-  ChevronRight, Star
+  ChevronRight, Star, X
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously } from "firebase/auth";
@@ -28,6 +28,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- ASSETS ---
+// NOTE: "accesories" is spelled with one 'c' to match your folder structure screenshot
 const SHOP_ITEMS = [
   // Headware
   { id: 'baseball_cap', name: 'Baseball Cap', type: 'headware', price: 15, thumb: '/assets/headware/baseball_cap_tn.png', overlay: '/assets/headware/baseball_cap.png' },
@@ -35,7 +36,7 @@ const SHOP_ITEMS = [
   { id: 'rocker_hair', name: 'Rocker Hair', type: 'headware', price: 35, thumb: '/assets/headware/rocker_hair_tn.png', overlay: '/assets/headware/rocker_hair.png' },
   { id: 'unicorn_horn', name: 'Unicorn Horn', type: 'headware', price: 50, thumb: '/assets/headware/unicorn_horn_tn.png', overlay: '/assets/headware/unicorn_horn.png' },
 
-  // Neckware (Pucca moved here)
+  // Neckware
   { id: 'pucca', name: 'Pucca', type: 'neckware', price: 30, thumb: '/assets/neckware/pucca_tn.png', overlay: '/assets/neckware/pucca.png' },
   { id: 'fancy_necklace', name: 'Fancy Necklace', type: 'neckware', price: 25, thumb: '/assets/neckware/fancy_necklace_tn.png', overlay: '/assets/neckware/fancy_necklace.png' },
   { id: 'locket', name: 'Gold Locket', type: 'neckware', price: 15, thumb: '/assets/neckware/locket_tn.png', overlay: '/assets/neckware/locket.png' },
@@ -46,10 +47,10 @@ const SHOP_ITEMS = [
   { id: 'ruby_slippers', name: 'Ruby Slippers', type: 'shoes', price: 40, thumb: '/assets/shoes/ruby_slippers_tn.png', overlay: '/assets/shoes/ruby_slippers.png' },
   { id: 'vans', name: 'Skater Vans', type: 'shoes', price: 25, thumb: '/assets/shoes/vans_tn.png', overlay: '/assets/shoes/vans.png' },
 
-  // Accessories
-  { id: 'mustache', name: 'Mustache', type: 'accessories', price: 12, thumb: '/assets/accessories/mustache_tn.png', overlay: '/assets/accessories/mustache.png' },
-  { id: 'shaker', name: 'Protein Shaker', type: 'accessories', price: 15, thumb: '/assets/accessories/shaker_tn.png', overlay: '/assets/accessories/shaker.png' },
-  { id: 'tote_bag', name: 'Tote Bag', type: 'accessories', price: 18, thumb: '/assets/accessories/tote_bag_tn.png', overlay: '/assets/accessories/tote_bag.png' },
+  // Accessories (Using 'accesories' folder from screenshot)
+  { id: 'mustache', name: 'Mustache', type: 'accessories', price: 12, thumb: '/assets/accesories/mustache_tn.png', overlay: '/assets/accesories/mustache.png' },
+  { id: 'shaker', name: 'Protein Shaker', type: 'accessories', price: 15, thumb: '/assets/accesories/shaker_tn.png', overlay: '/assets/accesories/shaker.png' },
+  { id: 'tote_bag', name: 'Tote Bag', type: 'accessories', price: 18, thumb: '/assets/accesories/tote_bag_tn.png', overlay: '/assets/accesories/tote_bag.png' },
 ];
 
 const COAT_COLORS = [
@@ -149,6 +150,17 @@ export default function StableGoals() {
     const townSnap = await getDoc(townRef);
     if (!townSnap.exists()) {
       await setDoc(townRef, { buildings: INITIAL_TOWN, stableName: stableName });
+    } else {
+      // Sync new buildings if needed
+      const currentBuildings = townSnap.data().buildings || [];
+      if (currentBuildings.length < INITIAL_TOWN.length) {
+        // Merge new buildings without overwriting progress on old ones
+        const mergedBuildings = INITIAL_TOWN.map(newB => {
+          const existing = currentBuildings.find(b => b.id === newB.id);
+          return existing || newB;
+        });
+        await updateDoc(townRef, { buildings: mergedBuildings });
+      }
     }
 
     onSnapshot(userRef, (doc) => setUserData(doc.data()));
@@ -260,15 +272,19 @@ export default function StableGoals() {
     if (sub2) newTasks.push({ id: Date.now() + '_s2', title: sub2, type: 'Subtask', reward_hay: 50, reward_stat: 'speed', isMain: false });
     if (sub3) newTasks.push({ id: Date.now() + '_s3', title: sub3, type: 'Subtask', reward_hay: 50, reward_stat: 'speed', isMain: false });
 
+    // Ensure we are appending to existing array even if it's empty
     const memberRef = doc(db, "users", selectedMember.id);
-    // In real app, use arrayUnion, but here we just append to avoid overwrite logic complexity
     const currentTasks = selectedMember.activeTasks || [];
-    await updateDoc(memberRef, { activeTasks: [...currentTasks, ...newTasks] });
+    
+    // Using updateDoc with full array replacement for simplicity in this array structure
+    await updateDoc(memberRef, { 
+      activeTasks: [...currentTasks, ...newTasks] 
+    });
+    
     setSelectedMember(null);
   };
 
   const runRace = () => {
-    // Simple simulation based on stats
     const results = teamMembers
       .filter(m => m.role !== 'manager')
       .map(m => ({
@@ -285,297 +301,294 @@ export default function StableGoals() {
     return SHOP_ITEMS.find(i => i.id === itemId)?.overlay;
   };
 
-  // --- RENDER ---
-
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-sky-50 text-sky-400 font-bold text-xl animate-pulse">Loading Stable...</div>;
   if (!session) return <LoginScreen onLogin={connectToGame} />;
   if (!userData || !townData) return null;
 
-  // --- MANAGER VIEW ---
-  if (userData.role === 'manager') {
-    const moods = teamMembers.map(m => m.stats?.mood).filter(Boolean);
-    const moodCounts = { fire: 0, happy: 0, ok: 0, tired: 0 };
-    moods.forEach(m => moodCounts[m] = (moodCounts[m] || 0) + 1);
-    
-    return (
-      <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-8">
-        <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-           <div>
-             <h1 className="text-3xl font-black text-slate-800">{townData.stableName || "My Stable"}</h1>
-             <div className="text-slate-400 font-bold flex items-center gap-2">
-                <span className="bg-slate-100 px-3 py-1 rounded-lg text-slate-500 font-mono text-sm">Code: {userData.teamCode}</span>
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-800">
+      
+      {/* MANAGER VIEW */}
+      {userData.role === 'manager' ? (
+        <div className="p-8 pb-20">
+          <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+             <div>
+               <h1 className="text-3xl font-black text-slate-800">{townData.stableName || "My Stable"}</h1>
+               <div className="text-slate-400 font-bold flex items-center gap-2">
+                  <span className="bg-slate-100 px-3 py-1 rounded-lg text-slate-500 font-mono text-sm">Code: {userData.teamCode}</span>
+               </div>
              </div>
-           </div>
-           <div className="flex gap-3">
-             <button onClick={() => { setRaceMode(true); runRace(); }} className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-200">
-                <Flag size={20} /> Run Race
-             </button>
-             <button onClick={handleLogout} className="flex items-center gap-2 text-rose-500 font-bold hover:bg-rose-50 px-4 py-2 rounded-xl transition-colors"><LogOut size={20} /></button>
-           </div>
-        </header>
+             <div className="flex gap-3">
+               <button onClick={() => { setRaceMode(true); runRace(); }} className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-200">
+                  <Flag size={20} /> Run Race
+               </button>
+               <button onClick={handleLogout} className="flex items-center gap-2 text-rose-500 font-bold hover:bg-rose-50 px-4 py-2 rounded-xl transition-colors"><LogOut size={20} /></button>
+             </div>
+          </header>
 
-        {raceMode ? (
-          <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden min-h-[60vh]">
-             <div className="flex justify-between items-center mb-8 relative z-10">
-                <h2 className="text-4xl font-black italic tracking-tighter text-amber-400">Weekly Gallop Results</h2>
-                <button onClick={() => { setRaceMode(false); setRaceResults(null); }} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold backdrop-blur">Close Race</button>
-             </div>
-             
-             <div className="space-y-6 relative z-10">
-                {raceResults?.map((r, i) => (
-                  <div key={r.id} className="flex items-center gap-4 animate-in slide-in-from-left duration-700" style={{ animationDelay: `${i * 100}ms` }}>
-                     <div className="text-3xl font-black w-12 text-slate-500">#{i+1}</div>
-                     <div className="flex-1 bg-slate-800/50 rounded-2xl p-2 flex items-center gap-4 pr-6 border border-slate-700">
-                        <div className="w-12 h-12 bg-white rounded-xl overflow-hidden relative">
-                           <img src={`/assets/horses/${r.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
+          {raceMode ? (
+            <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden min-h-[60vh]">
+               <div className="flex justify-between items-center mb-8 relative z-10">
+                  <h2 className="text-4xl font-black italic tracking-tighter text-amber-400">Weekly Gallop Results</h2>
+                  <button onClick={() => { setRaceMode(false); setRaceResults(null); }} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold backdrop-blur">Close Race</button>
+               </div>
+               
+               <div className="space-y-6 relative z-10">
+                  {raceResults?.map((r, i) => (
+                    <div key={r.id} className="flex items-center gap-4 animate-in slide-in-from-left duration-700" style={{ animationDelay: `${i * 100}ms` }}>
+                       <div className="text-3xl font-black w-12 text-slate-500">#{i+1}</div>
+                       <div className="flex-1 bg-slate-800/50 rounded-2xl p-2 flex items-center gap-4 pr-6 border border-slate-700">
+                          <div className="w-12 h-12 bg-white rounded-xl overflow-hidden relative">
+                             <img src={`/assets/horses/${r.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
+                          </div>
+                          <div className="flex-1">
+                             <div className="font-bold text-lg">{r.name}</div>
+                             <div className="h-2 bg-slate-700 rounded-full overflow-hidden mt-1">
+                                <div className="h-full bg-gradient-to-r from-amber-400 to-rose-500" style={{ width: `${Math.min(r.score, 100)}%` }}></div>
+                             </div>
+                          </div>
+                          <div className="text-right">
+                             <div className="text-xs text-slate-400 font-bold uppercase">Score</div>
+                             <div className="font-mono text-xl text-amber-400">{Math.floor(r.score)}</div>
+                          </div>
+                       </div>
+                    </div>
+                  ))}
+               </div>
+               <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asphalt-dark.png')]"></div>
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between">
+                    <div className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Team Mood</div>
+                    <div className="flex justify-between text-2xl">
+                      {/* Mood calculations inline for brevity */}
+                      <span title="On Fire">🔥 {teamMembers.filter(m => m.stats?.mood === 'fire').length}</span>
+                      <span title="Happy">😄 {teamMembers.filter(m => m.stats?.mood === 'happy').length}</span>
+                      <span title="Okay">😐 {teamMembers.filter(m => m.stats?.mood === 'ok').length}</span>
+                      <span title="Tired">😴 {teamMembers.filter(m => m.stats?.mood === 'tired').length}</span>
+                    </div>
+                </div>
+                <div className="md:col-span-3 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+                    <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-4">Quick Actions</h3>
+                    <div className="flex gap-4">
+                       <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl font-bold text-sm border border-emerald-100 flex items-center gap-2">
+                          <PlusCircle size={16} /> Assign Goals: Click a member below
+                       </div>
+                       <div className="bg-purple-50 text-purple-700 px-4 py-2 rounded-xl font-bold text-sm border border-purple-100">
+                          Town Progress: {townData.buildings.filter(b => b.unlocked).length}/{townData.buildings.length} Unlocked
+                       </div>
+                    </div>
+                </div>
+              </div>
+
+              <h2 className="text-xl font-black text-slate-700 mb-4">Active Roster ({teamMembers.length})</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {teamMembers.map((member) => (
+                  <div key={member.id} 
+                       onClick={() => member.role !== 'manager' && setSelectedMember(member)}
+                       className={`bg-white p-4 rounded-3xl border-2 transition-all cursor-pointer group relative overflow-hidden ${selectedMember?.id === member.id ? 'border-sky-400 ring-4 ring-sky-100' : 'border-slate-100 hover:border-sky-200'}`}
+                  >
+                      <div className="flex items-center gap-4 relative z-10">
+                        <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center relative overflow-hidden">
+                            <img src={`/assets/horses/${member.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
+                            {/* Overlay preview */}
+                            {getEquippedOverlay(member, 'headware') && <img src={getEquippedOverlay(member, 'headware')} className="absolute w-full h-full object-contain z-20" />}
                         </div>
                         <div className="flex-1">
-                           <div className="font-bold text-lg">{r.name}</div>
-                           <div className="h-2 bg-slate-700 rounded-full overflow-hidden mt-1">
-                              <div className="h-full bg-gradient-to-r from-amber-400 to-rose-500" style={{ width: `${Math.min(r.score, 100)}%` }}></div>
-                           </div>
+                            <div className="flex justify-between items-start">
+                              <div className="font-bold text-lg text-slate-700">{member.name}</div>
+                              {member.role === 'manager' && <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold uppercase">MGR</span>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 mt-2">
+                               <div className="bg-amber-50 rounded-lg px-2 py-1">
+                                  <div className="text-[10px] font-bold text-amber-400 uppercase">Speed</div>
+                                  <div className="font-black text-amber-700">{member.stats?.speed || 0}</div>
+                               </div>
+                               <div className="bg-rose-50 rounded-lg px-2 py-1">
+                                  <div className="text-[10px] font-bold text-rose-400 uppercase">Stamina</div>
+                                  <div className="font-black text-rose-700">{member.stats?.stamina || 0}</div>
+                               </div>
+                            </div>
                         </div>
-                        <div className="text-right">
-                           <div className="text-xs text-slate-400 font-bold uppercase">Score</div>
-                           <div className="font-mono text-xl text-amber-400">{Math.floor(r.score)}</div>
+                      </div>
+                      {member.role !== 'manager' && (
+                        <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400 group-hover:text-sky-500">
+                           <span>Active Tasks: {member.activeTasks?.length || 0}</span>
+                           <span className="flex items-center gap-1">Assign Goal <PlusCircle size={14} /></span>
                         </div>
-                     </div>
+                      )}
                   </div>
                 ))}
-             </div>
-             <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asphalt-dark.png')]"></div>
-          </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between">
-                  <div className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Team Mood</div>
-                  <div className="flex justify-between text-2xl">
-                    <span title="On Fire">🔥 {moodCounts.fire}</span>
-                    <span title="Happy">😄 {moodCounts.happy}</span>
-                    <span title="Okay">😐 {moodCounts.ok}</span>
-                    <span title="Tired">😴 {moodCounts.tired}</span>
-                  </div>
               </div>
-              <div className="md:col-span-3 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-                  <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-4">Quick Actions</h3>
-                  <div className="flex gap-4">
-                     <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl font-bold text-sm border border-emerald-100">
-                        Assign Goals: Click a member below
-                     </div>
-                     <div className="bg-purple-50 text-purple-700 px-4 py-2 rounded-xl font-bold text-sm border border-purple-100">
-                        Manage Town: {townData.buildings.filter(b => b.unlocked).length} / {townData.buildings.length} Unlocked
-                     </div>
-                  </div>
-              </div>
+            </>
+          )}
+        </div>
+      ) : (
+        // --- JOCKEY VIEW ---
+        <div className="flex flex-col h-full overflow-hidden">
+          <header className="bg-white border-b-2 border-slate-200 px-6 py-3 flex items-center justify-between z-20 shadow-sm shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="bg-sky-500 text-white p-2 rounded-xl"><Zap size={24} fill="currentColor" /></div>
+              <h1 className="text-xl font-black text-slate-700 hidden md:block">{townData.stableName || "Stable Goals"}</h1>
             </div>
+            <div className="flex items-center gap-6">
+               <div className="bg-amber-50 border-2 border-amber-100 px-4 py-1.5 rounded-xl flex items-center gap-2"><span className="text-2xl">🌾</span><div><div className="text-[10px] font-black text-amber-400 uppercase">Hay</div><div className="font-black text-amber-800">{userData.currency.hay}</div></div></div>
+               <div className="bg-pink-50 border-2 border-pink-100 px-4 py-1.5 rounded-xl flex items-center gap-2"><span className="text-2xl">🍬</span><div><div className="text-[10px] font-black text-pink-400 uppercase">Sugar</div><div className="font-black text-pink-800">{userData.currency.sugar}</div></div></div>
+               <button onClick={handleLogout} className="text-slate-400 hover:text-rose-500"><LogOut size={20} /></button>
+            </div>
+          </header>
 
-            <h2 className="text-xl font-black text-slate-700 mb-4">Active Roster ({teamMembers.length})</h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {teamMembers.map((member) => (
-                <div key={member.id} 
-                     onClick={() => member.role !== 'manager' && setSelectedMember(member)}
-                     className={`bg-white p-4 rounded-3xl border-2 transition-all cursor-pointer group relative overflow-hidden ${selectedMember?.id === member.id ? 'border-sky-400 ring-4 ring-sky-100' : 'border-slate-100 hover:border-sky-200'}`}
-                >
-                    <div className="flex items-center gap-4 relative z-10">
-                      <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center relative overflow-hidden">
-                          <img src={`/assets/horses/${member.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
-                          {/* Basic overlay preview for manager */}
-                          {getEquippedOverlay(member, 'headware') && <img src={getEquippedOverlay(member, 'headware')} className="absolute w-full h-full object-contain z-20" />}
+          <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
+            <section className="lg:col-span-5 relative bg-gradient-to-b from-sky-100 to-sky-50 flex flex-col border-r-2 border-slate-200">
+              <div className="flex-1 relative flex items-center justify-center p-8">
+                <div className="relative z-10 w-[300px] h-[300px] flex items-center justify-center">
+                  <img src={`/assets/horses/${userData.horseColor || 'white'}.png`} alt="Horse" className="absolute w-full h-full object-contain z-10" />
+                  {getEquippedOverlay(userData, 'shoes') && <img src={getEquippedOverlay(userData, 'shoes')} className="absolute w-full h-full object-contain z-20" />}
+                  {getEquippedOverlay(userData, 'neckware') && <img src={getEquippedOverlay(userData, 'neckware')} className="absolute w-full h-full object-contain z-30" />}
+                  {getEquippedOverlay(userData, 'headware') && <img src={getEquippedOverlay(userData, 'headware')} className="absolute w-full h-full object-contain z-40" />}
+                  {getEquippedOverlay(userData, 'accessories') && <img src={getEquippedOverlay(userData, 'accessories')} className="absolute w-full h-full object-contain z-50" />}
+                  {userData.digestingTask && <div className="absolute -bottom-10 bg-white px-6 py-3 rounded-2xl shadow-xl border-b-4 border-emerald-200 flex items-center gap-3 z-50 animate-bounce"><Clock size={20} className="text-emerald-500" /><span className="font-bold text-slate-700">Digesting...</span></div>}
+                </div>
+              </div>
+            </section>
+
+            <section className="lg:col-span-7 bg-[#F0F4F8] flex flex-col h-full overflow-hidden">
+              <div className="px-8 pt-8 pb-4 flex gap-4 overflow-x-auto no-scrollbar shrink-0">
+                 <GameButton active={view === 'work'} onClick={() => setView('work')} color="emerald" icon={Briefcase}>Work</GameButton>
+                 <GameButton active={view === 'town'} onClick={() => setView('town')} color="blue" icon={Home}>Town</GameButton>
+                 <GameButton active={view === 'shop'} onClick={() => setView('shop')} color="rose" icon={ShoppingBag}>Shop</GameButton>
+                 <GameButton active={view === 'salon'} onClick={() => setView('salon')} color="purple" icon={Scissors}>Salon</GameButton>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-8 pb-8">
+                {view === 'work' && (
+                  <div className="space-y-4">
+                    {userData.activeTasks.length > 0 ? userData.activeTasks.map(task => (
+                      <div key={task.id} className={`bg-white p-5 rounded-2xl border-2 flex justify-between items-center hover:shadow-md transition-shadow ${task.isMain ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-100'}`}>
+                        <div>
+                            <div className="flex items-center gap-2">
+                               {task.isMain && <Star size={16} className="text-amber-400 fill-amber-400" />}
+                               <div className="font-bold text-slate-700 text-lg">{task.title}</div>
+                            </div>
+                            <div className={`${task.isMain ? 'text-emerald-600' : 'text-slate-400'} font-bold text-xs mt-1 flex items-center gap-1`}>
+                               <span className="uppercase">{task.type}</span> • +{task.reward_hay} Hay
+                            </div>
+                        </div>
+                        <GameButton onClick={() => feedHorse(task)} color={task.isMain ? "emerald" : "white"} disabled={!!userData.digestingTask}>🍎</GameButton>
                       </div>
-                      <div className="flex-1">
-                          <div className="flex justify-between items-start">
-                            <div className="font-bold text-lg text-slate-700">{member.name}</div>
-                            {member.role === 'manager' && <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold uppercase">MGR</span>}
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 mt-2">
-                             <div className="bg-amber-50 rounded-lg px-2 py-1">
-                                <div className="text-[10px] font-bold text-amber-400 uppercase">Speed</div>
-                                <div className="font-black text-amber-700">{member.stats?.speed || 0}</div>
-                             </div>
-                             <div className="bg-rose-50 rounded-lg px-2 py-1">
-                                <div className="text-[10px] font-bold text-rose-400 uppercase">Stamina</div>
-                                <div className="font-black text-rose-700">{member.stats?.stamina || 0}</div>
-                             </div>
-                          </div>
-                      </div>
-                    </div>
-                    {member.role !== 'manager' && (
-                      <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400 group-hover:text-sky-500">
-                         <span>Active Tasks: {member.activeTasks?.length || 0}</span>
-                         <span className="flex items-center gap-1">Assign Goal <PlusCircle size={14} /></span>
+                    )) : (
+                      <div className="text-center py-20 bg-white rounded-[2.5rem] border-4 border-dashed border-slate-200">
+                         <div className="text-6xl mb-4 grayscale opacity-30">🥕</div>
+                         <div className="text-slate-400 font-bold">No Active Tasks</div>
+                         <div className="text-slate-300 text-sm">Ask your manager to assign goals!</div>
                       </div>
                     )}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* ASSIGN GOAL MODAL */}
-        {selectedMember && (
-          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-             <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
-                <div className="flex justify-between items-center mb-6">
-                   <div>
-                      <h3 className="text-2xl font-black text-slate-800">Assign Goals</h3>
-                      <p className="text-slate-400 font-bold">for {selectedMember.name}</p>
-                   </div>
-                   <button onClick={() => setSelectedMember(null)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><X size={20} /></button>
-                </div>
-                
-                <form onSubmit={assignGoal} className="space-y-4">
-                   <div>
-                      <label className="text-xs font-bold text-emerald-600 uppercase ml-2 mb-1 block">Main Focus (+200 Hay)</label>
-                      <input name="mainGoal" placeholder="e.g. Finish Q3 Report" className="w-full bg-emerald-50 border-2 border-emerald-100 rounded-xl px-4 py-3 font-bold text-emerald-900 placeholder-emerald-300 focus:outline-none focus:border-emerald-400" required />
-                   </div>
-                   
-                   <div className="space-y-2">
-                      <label className="text-xs font-bold text-slate-400 uppercase ml-2 block">Subtasks (+50 Hay)</label>
-                      <input name="sub1" placeholder="Subtask 1" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
-                      <input name="sub2" placeholder="Subtask 2" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
-                      <input name="sub3" placeholder="Subtask 3" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
-                   </div>
-
-                   <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-200 mt-4 transition-all">
-                      Confirm Assignment
-                   </button>
-                </form>
-             </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // --- JOCKEY VIEW ---
-  return (
-    <div className="min-h-screen bg-[#F0F4F8] font-sans text-slate-800 flex flex-col overflow-hidden">
-      {/* HEADER */}
-      <header className="bg-white border-b-2 border-slate-200 px-6 py-3 flex items-center justify-between z-20 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="bg-sky-500 text-white p-2 rounded-xl"><Zap size={24} fill="currentColor" /></div>
-          <h1 className="text-xl font-black text-slate-700 hidden md:block">{townData.stableName || "Stable Goals"}</h1>
-        </div>
-        <div className="flex items-center gap-6">
-           <div className="bg-amber-50 border-2 border-amber-100 px-4 py-1.5 rounded-xl flex items-center gap-2"><span className="text-2xl">🌾</span><div><div className="text-[10px] font-black text-amber-400 uppercase">Hay</div><div className="font-black text-amber-800">{userData.currency.hay}</div></div></div>
-           <div className="bg-pink-50 border-2 border-pink-100 px-4 py-1.5 rounded-xl flex items-center gap-2"><span className="text-2xl">🍬</span><div><div className="text-[10px] font-black text-pink-400 uppercase">Sugar</div><div className="font-black text-pink-800">{userData.currency.sugar}</div></div></div>
-           <button onClick={handleLogout} className="text-slate-400 hover:text-rose-500"><LogOut size={20} /></button>
-        </div>
-      </header>
-
-      {/* GAME GRID */}
-      <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-        <section className="lg:col-span-5 relative bg-gradient-to-b from-sky-100 to-sky-50 flex flex-col border-r-2 border-slate-200">
-          <div className="flex-1 relative flex items-center justify-center p-8">
-            <div className="relative z-10 w-[300px] h-[300px] flex items-center justify-center">
-              <img src={`/assets/horses/${userData.horseColor || 'white'}.png`} alt="Horse" className="absolute w-full h-full object-contain z-10" />
-              {getEquippedOverlay(userData, 'shoes') && <img src={getEquippedOverlay(userData, 'shoes')} className="absolute w-full h-full object-contain z-20" />}
-              {getEquippedOverlay(userData, 'neckware') && <img src={getEquippedOverlay(userData, 'neckware')} className="absolute w-full h-full object-contain z-30" />}
-              {getEquippedOverlay(userData, 'headware') && <img src={getEquippedOverlay(userData, 'headware')} className="absolute w-full h-full object-contain z-40" />}
-              {getEquippedOverlay(userData, 'accessories') && <img src={getEquippedOverlay(userData, 'accessories')} className="absolute w-full h-full object-contain z-50" />}
-              {userData.digestingTask && <div className="absolute -bottom-10 bg-white px-6 py-3 rounded-2xl shadow-xl border-b-4 border-emerald-200 flex items-center gap-3 z-50 animate-bounce"><Clock size={20} className="text-emerald-500" /><span className="font-bold text-slate-700">Digesting...</span></div>}
-            </div>
-          </div>
-        </section>
-
-        <section className="lg:col-span-7 bg-[#F0F4F8] flex flex-col h-full overflow-hidden">
-          <div className="px-8 pt-8 pb-4 flex gap-4 overflow-x-auto no-scrollbar">
-             <GameButton active={view === 'work'} onClick={() => setView('work')} color="emerald" icon={Briefcase}>Work</GameButton>
-             <GameButton active={view === 'town'} onClick={() => setView('town')} color="blue" icon={Home}>Town</GameButton>
-             <GameButton active={view === 'shop'} onClick={() => setView('shop')} color="rose" icon={ShoppingBag}>Shop</GameButton>
-             <GameButton active={view === 'salon'} onClick={() => setView('salon')} color="purple" icon={Scissors}>Salon</GameButton>
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-8 pb-8">
-            {view === 'work' && (
-              <div className="space-y-4">
-                {userData.activeTasks.length > 0 ? userData.activeTasks.map(task => (
-                  <div key={task.id} className={`bg-white p-5 rounded-2xl border-2 flex justify-between items-center hover:shadow-md transition-shadow ${task.isMain ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-100'}`}>
-                    <div>
-                        <div className="flex items-center gap-2">
-                           {task.isMain && <Star size={16} className="text-amber-400 fill-amber-400" />}
-                           <div className="font-bold text-slate-700 text-lg">{task.title}</div>
-                        </div>
-                        <div className={`${task.isMain ? 'text-emerald-600' : 'text-slate-400'} font-bold text-xs mt-1 flex items-center gap-1`}>
-                           <span className="uppercase">{task.type}</span> • +{task.reward_hay} Hay
-                        </div>
-                    </div>
-                    <GameButton onClick={() => feedHorse(task)} color={task.isMain ? "emerald" : "white"} disabled={!!userData.digestingTask}>🍎</GameButton>
                   </div>
-                )) : (
-                  <div className="text-center py-20 bg-white rounded-[2.5rem] border-4 border-dashed border-slate-200">
-                     <div className="text-6xl mb-4 grayscale opacity-30">🥕</div>
-                     <div className="text-slate-400 font-bold">No Active Tasks</div>
-                     <div className="text-slate-300 text-sm">Ask your manager to assign goals!</div>
+                )}
+                {view === 'town' && (
+                  <div className="space-y-6">
+                      {townData.buildings.map(b => (
+                        <div key={b.id} className={`p-6 rounded-3xl border-b-8 relative overflow-hidden ${b.unlocked ? 'bg-white border-slate-200' : 'bg-slate-100 border-slate-200'}`}>
+                          <div className="flex justify-between items-start mb-4 relative z-10">
+                             <div className="flex items-center gap-4">
+                                <span className="text-4xl">{b.icon}</span>
+                                <div>
+                                   <h3 className="font-black text-slate-700 text-lg">{b.name}</h3>
+                                   <p className="text-slate-400 text-xs font-bold uppercase">{b.description}</p>
+                                </div>
+                             </div>
+                             {b.unlocked ? <CheckCircle className="text-emerald-500" /> : <div className="text-xs font-black text-slate-400 bg-slate-200 px-2 py-1 rounded">{b.current}/{b.cost}</div>}
+                          </div>
+                          {!b.unlocked ? (
+                            <div className="relative z-10">
+                               <div className="h-3 bg-slate-200 rounded-full overflow-hidden mb-4">
+                                  <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${(b.current / b.cost) * 100}%` }}></div>
+                               </div>
+                               <GameButton onClick={() => contributeToTown(b.id)} color="blue" className="w-full mt-2 text-sm">Contribute 50 Hay</GameButton>
+                            </div>
+                          ) : <GameButton onClick={() => b.id === 'salon' ? setView('salon') : null} color="white" className="w-full mt-4 text-sm relative z-10">Enter Building</GameButton>}
+                        </div>
+                      ))}
+                  </div>
+                )}
+                {view === 'shop' && (
+                  <div className="space-y-4">
+                     <div className="flex gap-2 pb-2 overflow-x-auto">{['all', 'headware', 'neckware', 'shoes', 'accessories'].map(f => <button key={f} onClick={() => setShopFilter(f)} className={`px-4 py-2 rounded-xl text-xs font-bold uppercase ${shopFilter === f ? 'bg-rose-500 text-white' : 'bg-white text-slate-400'}`}>{f}</button>)}</div>
+                     <div className="grid grid-cols-3 gap-4">
+                      {SHOP_ITEMS.filter(i => shopFilter === 'all' || i.type === shopFilter).map(item => {
+                        const isOwned = userData.inventory?.includes(item.id);
+                        return (
+                          <button key={item.id} onClick={() => isOwned ? equipItem(item) : buyItem(item)} className={`p-4 rounded-[2rem] border-b-8 flex flex-col items-center text-center bg-white border-slate-200 ${userData.equipped[item.type] === item.id ? 'ring-4 ring-rose-200' : ''}`}>
+                            <img src={item.thumb} className="w-16 h-16 object-contain mb-2" />
+                            <div className="font-bold text-xs text-slate-700">{item.name}</div>
+                            <div className={`mt-2 text-[10px] font-black px-2 py-1 rounded uppercase ${isOwned ? 'bg-slate-100 text-slate-400' : 'bg-pink-500 text-white'}`}>{isOwned ? 'Own' : item.price}</div>
+                          </button>
+                        )
+                      })}
+                     </div>
+                  </div>
+                )}
+                {view === 'salon' && (
+                  <div className="grid grid-cols-3 gap-4">
+                    {townData.buildings.find(b => b.id === 'salon')?.unlocked ? COAT_COLORS.map(coat => (
+                       <button key={coat.id} onClick={() => userData.ownedCoats.includes(coat.id) ? equipCoat(coat.id) : buyCoat(coat)} className="p-4 rounded-[2rem] border-b-8 flex flex-col items-center bg-white border-slate-200">
+                          <img src={coat.img} className="w-16 h-16 object-contain mb-2" />
+                          <div className="font-bold text-xs">{coat.name}</div>
+                          <div className={`mt-2 text-[10px] font-black px-2 py-1 rounded uppercase ${userData.ownedCoats.includes(coat.id) ? 'bg-slate-100 text-slate-400' : 'bg-purple-500 text-white'}`}>{userData.ownedCoats.includes(coat.id) ? 'Own' : coat.price}</div>
+                       </button>
+                    )) : <div className="col-span-3 text-center p-10 text-slate-400 font-bold">Salon Locked. Build it in Town!</div>}
                   </div>
                 )}
               </div>
-            )}
-            {view === 'town' && (
-              <div className="space-y-6">
-                  {townData.buildings.map(b => (
-                    <div key={b.id} className={`p-6 rounded-3xl border-b-8 relative overflow-hidden ${b.unlocked ? 'bg-white border-slate-200' : 'bg-slate-100 border-slate-200'}`}>
-                      <div className="flex justify-between items-start mb-4 relative z-10">
-                         <div className="flex items-center gap-4">
-                            <span className="text-4xl">{b.icon}</span>
-                            <div>
-                               <h3 className="font-black text-slate-700 text-lg">{b.name}</h3>
-                               <p className="text-slate-400 text-xs font-bold uppercase">{b.description}</p>
-                            </div>
-                         </div>
-                         {b.unlocked ? <CheckCircle className="text-emerald-500" /> : <div className="text-xs font-black text-slate-400 bg-slate-200 px-2 py-1 rounded">{b.current}/{b.cost}</div>}
-                      </div>
-                      {!b.unlocked ? (
-                        <div className="relative z-10">
-                           <div className="h-3 bg-slate-200 rounded-full overflow-hidden mb-4">
-                              <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${(b.current / b.cost) * 100}%` }}></div>
-                           </div>
-                           <GameButton onClick={() => contributeToTown(b.id)} color="blue" className="w-full mt-2 text-sm">Contribute 50 Hay</GameButton>
-                        </div>
-                      ) : <GameButton onClick={() => b.id === 'salon' ? setView('salon') : null} color="white" className="w-full mt-4 text-sm relative z-10">Enter Building</GameButton>}
-                    </div>
-                  ))}
-              </div>
-            )}
-            {view === 'shop' && (
-              <div className="space-y-4">
-                 <div className="flex gap-2 pb-2 overflow-x-auto">{['all', 'headware', 'neckware', 'shoes', 'accessories'].map(f => <button key={f} onClick={() => setShopFilter(f)} className={`px-4 py-2 rounded-xl text-xs font-bold uppercase ${shopFilter === f ? 'bg-rose-500 text-white' : 'bg-white text-slate-400'}`}>{f}</button>)}</div>
-                 <div className="grid grid-cols-3 gap-4">
-                  {SHOP_ITEMS.filter(i => shopFilter === 'all' || i.type === shopFilter).map(item => {
-                    const isOwned = userData.inventory?.includes(item.id);
-                    return (
-                      <button key={item.id} onClick={() => isOwned ? equipItem(item) : buyItem(item)} className={`p-4 rounded-[2rem] border-b-8 flex flex-col items-center text-center bg-white border-slate-200 ${userData.equipped[item.type] === item.id ? 'ring-4 ring-rose-200' : ''}`}>
-                        <img src={item.thumb} className="w-16 h-16 object-contain mb-2" />
-                        <div className="font-bold text-xs text-slate-700">{item.name}</div>
-                        <div className={`mt-2 text-[10px] font-black px-2 py-1 rounded uppercase ${isOwned ? 'bg-slate-100 text-slate-400' : 'bg-pink-500 text-white'}`}>{isOwned ? 'Own' : item.price}</div>
-                      </button>
-                    )
-                  })}
-                 </div>
-              </div>
-            )}
-            {view === 'salon' && (
-              <div className="grid grid-cols-3 gap-4">
-                {townData.buildings.find(b => b.id === 'salon')?.unlocked ? COAT_COLORS.map(coat => (
-                   <button key={coat.id} onClick={() => userData.ownedCoats.includes(coat.id) ? equipCoat(coat.id) : buyCoat(coat)} className="p-4 rounded-[2rem] border-b-8 flex flex-col items-center bg-white border-slate-200">
-                      <img src={coat.img} className="w-16 h-16 object-contain mb-2" />
-                      <div className="font-bold text-xs">{coat.name}</div>
-                      <div className={`mt-2 text-[10px] font-black px-2 py-1 rounded uppercase ${userData.ownedCoats.includes(coat.id) ? 'bg-slate-100 text-slate-400' : 'bg-purple-500 text-white'}`}>{userData.ownedCoats.includes(coat.id) ? 'Own' : coat.price}</div>
-                   </button>
-                )) : <div className="col-span-3 text-center p-10 text-slate-400 font-bold">Salon Locked. Build it in Town!</div>}
-              </div>
-            )}
-          </div>
-        </section>
-      </main>
+            </section>
+          </main>
+        </div>
+      )}
+
+      {/* OVERLAYS */}
       
+      {/* 1. Wellness Overlay */}
       {showWellness && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4">
           <div className="bg-white max-w-lg w-full p-10 rounded-[3rem] text-center border-8 border-white">
             <h2 className="text-3xl font-black text-slate-800 mb-2">Morning Grooming</h2>
             <div className="grid grid-cols-2 gap-4 mt-6">{['fire', 'happy', 'ok', 'tired'].map(m => <button key={m} onClick={() => handleWellness(m)} className="p-6 bg-slate-50 rounded-[2rem] border-b-8 border-slate-200 hover:bg-sky-50 text-2xl capitalize font-bold">{m}</button>)}</div>
           </div>
+        </div>
+      )}
+
+      {/* 2. Manager Assign Goal Overlay - MOVED TO ROOT LEVEL */}
+      {selectedMember && (
+        <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+           <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+              <div className="flex justify-between items-center mb-6">
+                 <div>
+                    <h3 className="text-2xl font-black text-slate-800">Assign Goals</h3>
+                    <p className="text-slate-400 font-bold">for {selectedMember.name}</p>
+                 </div>
+                 <button onClick={() => setSelectedMember(null)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><X size={20} /></button>
+              </div>
+              
+              <form onSubmit={assignGoal} className="space-y-4">
+                 <div>
+                    <label className="text-xs font-bold text-emerald-600 uppercase ml-2 mb-1 block">Main Focus (+200 Hay)</label>
+                    <input name="mainGoal" placeholder="e.g. Finish Q3 Report" className="w-full bg-emerald-50 border-2 border-emerald-100 rounded-xl px-4 py-3 font-bold text-emerald-900 placeholder-emerald-300 focus:outline-none focus:border-emerald-400" required />
+                 </div>
+                 
+                 <div className="space-y-2">
+                    <label className="text-xs font-bold text-slate-400 uppercase ml-2 block">Subtasks (+50 Hay)</label>
+                    <input name="sub1" placeholder="Subtask 1" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
+                    <input name="sub2" placeholder="Subtask 2" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
+                    <input name="sub3" placeholder="Subtask 3" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
+                 </div>
+
+                 <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-200 mt-4 transition-all">
+                    Confirm Assignment
+                 </button>
+              </form>
+           </div>
         </div>
       )}
     </div>
