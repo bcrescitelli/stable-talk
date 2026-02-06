@@ -4,7 +4,7 @@ import {
   Clock, CheckCircle, Zap, LogOut, Scissors, 
   Users, Activity, TrendingUp, AlertCircle,
   BookOpen, Dumbbell, Flag, PlusCircle, Play,
-  ChevronRight, Star, X, Gift, Bus, Heart
+  ChevronRight, Star, X, Gift, Bus, Heart, Lock
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously } from "firebase/auth";
@@ -28,6 +28,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 // --- ASSETS ---
+// Using "accesories" (one c) to match your folder structure screenshot
 const SHOP_ITEMS = [
   // Headware
   { id: 'baseball_cap', name: 'Baseball Cap', type: 'headware', price: 15, thumb: '/assets/headware/baseball_cap_tn.png', overlay: '/assets/headware/baseball_cap.png' },
@@ -58,21 +59,21 @@ const COAT_COLORS = [
   { id: 'blue', name: 'Mystic Blue', price: 250, img: '/assets/horses/blue.png' },
 ];
 
-// Lowered sugar rewards as requested
 const INITIAL_TASKS = [
   { id: 'init_1', title: "Join the Team", type: "Onboarding", reward_hay: 50, reward_sugar: 2, reward_stat: "stamina", isMain: false }
 ];
 
+// UPDATED TOWN STRUCTURE
 const INITIAL_TOWN = [
   { id: 'chat_barn', name: 'Chat Barn', cost: 300, current: 0, icon: '💬', description: 'Unlocks Team Chat', unlocked: false },
   { id: 'salon', name: 'The Mane Salon', cost: 500, current: 0, icon: '✂️', description: 'Unlocks Coat Colors', unlocked: false },
-  { id: 'bus', name: 'Team Bus', cost: 600, current: 0, icon: '🚌', description: 'Unlocks Team Paddock View', unlocked: false },
-  { id: 'gift_shop', name: 'Gift Shop', cost: 800, current: 0, icon: '🎁', description: 'Send Gifts to Teammates', unlocked: false },
-  { id: 'racetrack', name: 'Derby Track', cost: 1000, current: 0, icon: '🏁', description: 'Unlocks Weekly Manager Race', unlocked: false },
+  { id: 'bus', name: 'Team Bus', cost: 600, current: 0, icon: '🚌', description: 'Unlocks Team Paddock', unlocked: false },
+  { id: 'gift_shop', name: 'Gift Shop', cost: 800, current: 0, icon: '🎁', description: 'Send Gifts to Team', unlocked: false },
+  { id: 'racetrack', name: 'Derby Track', cost: 1000, current: 0, icon: '🏁', description: 'Unlocks Manager Race', unlocked: false },
 ];
 
 const DEFAULT_USER_STATE = {
-  currency: { sugar: 15, hay: 100 }, // Lowered starting sugar
+  currency: { sugar: 15, hay: 100 }, 
   stats: { speed: 10, stamina: 10, mood: null },
   inventory: [], ownedCoats: ['white'], horseColor: 'white',
   equipped: { headware: null, neckware: null, shoes: null, accessories: null },
@@ -118,8 +119,8 @@ export default function StableGoals() {
   // Manager/Interaction State
   const [selectedMember, setSelectedMember] = useState(null);
   const [raceMode, setRaceMode] = useState(false);
-  const [raceState, setRaceState] = useState(null); // 'waiting', 'running', 'finished'
-  const [racePositions, setRacePositions] = useState({}); // { userId: progress% }
+  const [raceState, setRaceState] = useState(null); 
+  const [racePositions, setRacePositions] = useState({}); 
 
   useEffect(() => {
     const initApp = async () => {
@@ -155,15 +156,14 @@ export default function StableGoals() {
     if (!townSnap.exists()) {
       await setDoc(townRef, { buildings: INITIAL_TOWN, stableName: stableName });
     } else {
-      // Sync new buildings if needed
+      // FORCE UPDATE TOWN STRUCTURE (Remove old buildings like Library/Gym, Add new ones)
       const currentBuildings = townSnap.data().buildings || [];
-      if (currentBuildings.length < INITIAL_TOWN.length) {
-        const mergedBuildings = INITIAL_TOWN.map(newB => {
-          const existing = currentBuildings.find(b => b.id === newB.id);
-          return existing || newB;
-        });
-        await updateDoc(townRef, { buildings: mergedBuildings });
-      }
+      const mergedBuildings = INITIAL_TOWN.map(newB => {
+        const existing = currentBuildings.find(b => b.id === newB.id);
+        // Preserve state if existing, otherwise use new definition
+        return existing ? { ...newB, current: existing.current, unlocked: existing.unlocked } : newB;
+      });
+      await updateDoc(townRef, { buildings: mergedBuildings });
     }
 
     onSnapshot(userRef, (doc) => setUserData(doc.data()));
@@ -283,7 +283,7 @@ export default function StableGoals() {
       const senderRef = doc(db, "users", session.docId);
       const receiverRef = doc(db, "users", targetUserId);
       await updateDoc(senderRef, { "currency.sugar": increment(-10) });
-      await updateDoc(receiverRef, { "currency.hay": increment(50), "currency.sugar": increment(2) }); // Adjusted gift reward
+      await updateDoc(receiverRef, { "currency.hay": increment(50), "currency.sugar": increment(2) }); 
       showToast("Gift Sent! (-10 Sugar)");
     } else {
       showToast("Need 10 Sugar to send gift", "error");
@@ -294,7 +294,7 @@ export default function StableGoals() {
     const userRef = doc(db, "users", session.docId);
     await updateDoc(userRef, { 
       "stats.mood": mood, 
-      "currency.sugar": increment(2), // Lowered wellness sugar reward
+      "currency.sugar": increment(2), 
       "currency.hay": increment(20),
       "stats.stamina": increment(1),
       "lastCheckIn": new Date().toDateString()
@@ -311,7 +311,6 @@ export default function StableGoals() {
     const sub2 = d.get('sub2');
     const sub3 = d.get('sub3');
 
-    // ADJUSTED REWARDS: Main = 5 Sugar, Sub = 2 Sugar
     const newTasks = [
       { id: Date.now() + '_main', title: mainTitle, type: 'Main Focus', reward_hay: 200, reward_sugar: 5, reward_stat: 'stamina', isMain: true }
     ];
@@ -329,29 +328,24 @@ export default function StableGoals() {
     showToast("Goals Assigned!");
   };
 
-  // --- RACE LOGIC ---
   const startRace = () => {
     setRaceState('running');
     setRacePositions({});
     
-    // Simulate race over 5 seconds
     const racers = teamMembers.filter(m => m.role !== 'manager');
     const interval = setInterval(() => {
       setRacePositions(prev => {
         const next = { ...prev };
         let finishedCount = 0;
-        
         racers.forEach(r => {
           const current = next[r.id] || 0;
           if (current >= 100) {
             finishedCount++;
             return;
           }
-          // Speed calc: Base + Stats + Random
           const speed = 0.5 + (r.stats.speed * 0.1) + (r.stats.stamina * 0.05) + (Math.random() * 2);
           next[r.id] = Math.min(current + speed, 100);
         });
-
         if (finishedCount === racers.length) {
           clearInterval(interval);
           setRaceState('finished');
@@ -379,6 +373,7 @@ export default function StableGoals() {
     
     const avgSpeed = Math.floor(teamMembers.reduce((acc, m) => acc + (m.stats?.speed || 0), 0) / (teamMembers.length || 1));
     const avgStamina = Math.floor(teamMembers.reduce((acc, m) => acc + (m.stats?.stamina || 0), 0) / (teamMembers.length || 1));
+    const racetrackUnlocked = townData.buildings.find(b => b.id === 'racetrack')?.unlocked;
 
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-8">
@@ -390,9 +385,15 @@ export default function StableGoals() {
              </div>
            </div>
            <div className="flex gap-3">
-             <button onClick={() => { setRaceMode(true); setRaceState('waiting'); }} className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-200">
-                <Flag size={20} /> Start Derby
-             </button>
+             {racetrackUnlocked ? (
+               <button onClick={() => { setRaceMode(true); setRaceState('waiting'); }} className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-200">
+                  <Flag size={20} /> Start Derby
+               </button>
+             ) : (
+               <div className="flex items-center gap-2 bg-slate-100 text-slate-400 font-bold px-6 py-3 rounded-xl cursor-not-allowed">
+                  <Lock size={16} /> Derby Locked
+               </div>
+             )}
              <button onClick={handleLogout} className="flex items-center gap-2 text-rose-500 font-bold hover:bg-rose-50 px-4 py-2 rounded-xl transition-colors"><LogOut size={20} /></button>
            </div>
         </header>
@@ -406,7 +407,6 @@ export default function StableGoals() {
                    <button onClick={() => { setRaceMode(false); setRaceState(null); }} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold backdrop-blur">Exit</button>
                 </div>
              </div>
-             
              <div className="space-y-6 relative z-10">
                 {teamMembers.filter(m => m.role !== 'manager').map((r, i) => (
                   <div key={r.id} className="relative">
@@ -416,14 +416,10 @@ export default function StableGoals() {
                            <img src={`/assets/horses/${r.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
                         </div>
                         <div className="font-bold text-sm text-slate-300 w-24 truncate">{r.name}</div>
-                        
-                        {/* Track Lane */}
                         <div className="flex-1 h-12 bg-slate-800 rounded-xl relative overflow-hidden border border-slate-700">
                            <div className="absolute top-0 bottom-0 w-[2px] bg-slate-600 left-[10%]"></div>
                            <div className="absolute top-0 bottom-0 w-[2px] bg-slate-600 left-[50%]"></div>
-                           <div className="absolute top-0 bottom-0 w-[4px] bg-amber-500/50 right-0"></div> {/* Finish Line */}
-                           
-                           {/* Horse Runner */}
+                           <div className="absolute top-0 bottom-0 w-[4px] bg-amber-500/50 right-0"></div> 
                            <div 
                               className="absolute top-1/2 transform -translate-y-1/2 transition-all duration-300 ease-linear text-3xl"
                               style={{ left: `calc(${racePositions[r.id] || 0}% - 30px)` }}
@@ -435,19 +431,11 @@ export default function StableGoals() {
                   </div>
                 ))}
              </div>
-             {raceState === 'finished' && (
-                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-                   <div className="bg-white text-slate-900 p-8 rounded-3xl text-center shadow-2xl animate-in zoom-in">
-                      <h3 className="text-3xl font-black mb-2 text-amber-500">Race Finished!</h3>
-                      <p className="font-bold">Check out who has the highest stats!</p>
-                      <button onClick={() => setRaceMode(false)} className="mt-6 bg-slate-900 text-white px-6 py-3 rounded-xl font-bold">Return to Dashboard</button>
-                   </div>
-                </div>
-             )}
           </div>
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              {/* Stats Cards */}
               <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between">
                   <div className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Team Mood</div>
                   <div className="flex justify-between text-2xl">
@@ -460,14 +448,8 @@ export default function StableGoals() {
               <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between">
                   <div className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Health & Energy</div>
                   <div className="flex gap-4">
-                     <div>
-                        <div className="text-xs font-bold text-amber-500">Avg Speed</div>
-                        <div className="text-2xl font-black">{avgSpeed}</div>
-                     </div>
-                     <div>
-                        <div className="text-xs font-bold text-rose-500">Avg Stamina</div>
-                        <div className="text-2xl font-black">{avgStamina}</div>
-                     </div>
+                     <div><div className="text-xs font-bold text-amber-500">Avg Speed</div><div className="text-2xl font-black">{avgSpeed}</div></div>
+                     <div><div className="text-xs font-bold text-rose-500">Avg Stamina</div><div className="text-2xl font-black">{avgStamina}</div></div>
                   </div>
               </div>
               <div className="md:col-span-2 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
@@ -501,14 +483,8 @@ export default function StableGoals() {
                             {member.role === 'manager' && <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold uppercase">MGR</span>}
                           </div>
                           <div className="grid grid-cols-2 gap-2 mt-2">
-                             <div className="bg-amber-50 rounded-lg px-2 py-1">
-                                <div className="text-[10px] font-bold text-amber-400 uppercase">Speed</div>
-                                <div className="font-black text-amber-700">{member.stats?.speed || 0}</div>
-                             </div>
-                             <div className="bg-rose-50 rounded-lg px-2 py-1">
-                                <div className="text-[10px] font-bold text-rose-400 uppercase">Stamina</div>
-                                <div className="font-black text-rose-700">{member.stats?.stamina || 0}</div>
-                             </div>
+                             <div className="bg-amber-50 rounded-lg px-2 py-1"><div className="text-[10px] font-bold text-amber-400 uppercase">Speed</div><div className="font-black text-amber-700">{member.stats?.speed || 0}</div></div>
+                             <div className="bg-rose-50 rounded-lg px-2 py-1"><div className="text-[10px] font-bold text-rose-400 uppercase">Stamina</div><div className="font-black text-rose-700">{member.stats?.stamina || 0}</div></div>
                           </div>
                       </div>
                     </div>
@@ -529,10 +505,7 @@ export default function StableGoals() {
           <div className="fixed inset-0 z-[60] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
              <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
                 <div className="flex justify-between items-center mb-6">
-                   <div>
-                      <h3 className="text-2xl font-black text-slate-800">Assign Goals</h3>
-                      <p className="text-slate-400 font-bold">for {selectedMember.name}</p>
-                   </div>
+                   <div><h3 className="text-2xl font-black text-slate-800">Assign Goals</h3><p className="text-slate-400 font-bold">for {selectedMember.name}</p></div>
                    <button onClick={() => setSelectedMember(null)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><X size={20} /></button>
                 </div>
                 
@@ -541,17 +514,13 @@ export default function StableGoals() {
                       <label className="text-xs font-bold text-emerald-600 uppercase ml-2 mb-1 block">Main Focus (+200 Hay, +5 Sugar)</label>
                       <input name="mainGoal" placeholder="e.g. Finish Q3 Report" className="w-full bg-emerald-50 border-2 border-emerald-100 rounded-xl px-4 py-3 font-bold text-emerald-900 placeholder-emerald-300 focus:outline-none focus:border-emerald-400" required />
                    </div>
-                   
                    <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-400 uppercase ml-2 block">Subtasks (+50 Hay, +2 Sugar)</label>
                       <input name="sub1" placeholder="Subtask 1" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
                       <input name="sub2" placeholder="Subtask 2" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
                       <input name="sub3" placeholder="Subtask 3" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
                    </div>
-
-                   <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-200 mt-4 transition-all">
-                      Confirm Assignment
-                   </button>
+                   <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-200 mt-4 transition-all">Confirm Assignment</button>
                 </form>
              </div>
           </div>
@@ -578,7 +547,30 @@ export default function StableGoals() {
 
       {/* GAME GRID */}
       <main className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-12">
-        <section className="lg:col-span-5 relative bg-gradient-to-b from-sky-100 to-sky-50 flex flex-col border-r-2 border-slate-200">
+        <section className="lg:col-span-5 relative bg-gradient-to-b from-sky-100 to-sky-50 flex flex-col border-r-2 border-slate-200 p-6">
+          
+          {/* HORSE STATS BAR - Moved out of horse container */}
+          <div className="flex gap-4 justify-between bg-white/60 backdrop-blur-md p-4 rounded-3xl border border-white mb-6 shadow-sm">
+             <div className="flex-1">
+                <div className="flex justify-between items-end mb-1">
+                   <span className="text-xs font-bold text-rose-500 uppercase tracking-wider">Health</span>
+                   <span className="font-black text-rose-700 text-lg">{userData.stats.stamina}</span>
+                </div>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                   <div className="h-full bg-rose-500 transition-all duration-500" style={{ width: `${Math.min(userData.stats.stamina * 5, 100)}%` }}></div>
+                </div>
+             </div>
+             <div className="flex-1">
+                <div className="flex justify-between items-end mb-1">
+                   <span className="text-xs font-bold text-amber-500 uppercase tracking-wider">Energy</span>
+                   <span className="font-black text-amber-700 text-lg">{userData.stats.speed}</span>
+                </div>
+                <div className="h-3 bg-slate-200 rounded-full overflow-hidden">
+                   <div className="h-full bg-amber-500 transition-all duration-500" style={{ width: `${Math.min(userData.stats.speed * 5, 100)}%` }}></div>
+                </div>
+             </div>
+          </div>
+
           <div className="flex-1 relative flex items-center justify-center p-8">
             <div className="relative z-10 w-[300px] h-[300px] flex items-center justify-center">
               <img src={`/assets/horses/${userData.horseColor || 'white'}.png`} alt="Horse" className="absolute w-full h-full object-contain z-10" />
@@ -587,18 +579,6 @@ export default function StableGoals() {
               {getEquippedOverlay(userData, 'headware') && <img src={getEquippedOverlay(userData, 'headware')} className="absolute w-full h-full object-contain z-40" />}
               {getEquippedOverlay(userData, 'accessories') && <img src={getEquippedOverlay(userData, 'accessories')} className="absolute w-full h-full object-contain z-50" />}
               {userData.digestingTask && <div className="absolute -bottom-10 bg-white px-6 py-3 rounded-2xl shadow-xl border-b-4 border-emerald-200 flex items-center gap-3 z-50 animate-bounce"><Clock size={20} className="text-emerald-500" /><span className="font-bold text-slate-700">Digesting...</span></div>}
-              
-              {/* Stats Overlay (Moved to top-left and z-60 to be on top) */}
-              <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-1 w-24 z-[60]">
-                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Health</div>
-                 <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-rose-500" style={{ width: `${Math.min(userData.stats.stamina * 5, 100)}%` }}></div>
-                 </div>
-                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">Energy</div>
-                 <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500" style={{ width: `${Math.min(userData.stats.speed * 5, 100)}%` }}></div>
-                 </div>
-              </div>
             </div>
           </div>
         </section>
