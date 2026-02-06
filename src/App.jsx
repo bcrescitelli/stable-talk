@@ -55,13 +55,13 @@ const SHOP_ITEMS = [
   // Headware
   { id: 'baseball_cap', name: 'Baseball Cap', type: 'headware', price: 15, thumb: '/assets/headware/baseball_cap_tn.png', overlay: '/assets/headware/baseball_cap.png' },
   { id: 'butterfly_clip', name: 'Butterfly Clip', type: 'headware', price: 10, thumb: '/assets/headware/butterfly_clip_tn.png', overlay: '/assets/headware/butterfly_clip.png' },
-  { id: 'pucca_buns', name: 'Pucca Buns', type: 'headware', price: 30, thumb: '/assets/headware/pucca_buns_tn.png', overlay: '/assets/headware/pucca_buns.png' },
   { id: 'rocker_hair', name: 'Rocker Hair', type: 'headware', price: 35, thumb: '/assets/headware/rocker_hair_tn.png', overlay: '/assets/headware/rocker_hair.png' },
   { id: 'unicorn_horn', name: 'Unicorn Horn', type: 'headware', price: 50, thumb: '/assets/headware/unicorn_horn_tn.png', overlay: '/assets/headware/unicorn_horn.png' },
 
   // Neckware
   { id: 'fancy_necklace', name: 'Fancy Necklace', type: 'neckware', price: 25, thumb: '/assets/neckware/fancy_necklace_tn.png', overlay: '/assets/neckware/fancy_necklace.png' },
   { id: 'locket', name: 'Gold Locket', type: 'neckware', price: 15, thumb: '/assets/neckware/locket_tn.png', overlay: '/assets/neckware/locket.png' },
+  { id: 'pucca', name: 'Pucca', type: 'headware', price: 30, thumb: '/assets/headware/pucca_tn.png', overlay: '/assets/headware/pucca.png' },
 
   // Shoes
   { id: 'cool_sneakers', name: 'Cool Sneakers', type: 'shoes', price: 20, thumb: '/assets/shoes/cool_sneakers_tn.png', overlay: '/assets/shoes/cool_sneakers.png' },
