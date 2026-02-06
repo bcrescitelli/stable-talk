@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   Briefcase, ShoppingBag, Home, Trophy, 
   Clock, CheckCircle, Zap, LogOut, Scissors, 
-  Users, Activity, TrendingUp, AlertCircle
+  Users, Activity, TrendingUp, AlertCircle,
+  BookOpen, Dumbbell, Flag, PlusCircle, Play,
+  ChevronRight, Star
 } from 'lucide-react';
 import { initializeApp } from "firebase/app";
 import { getAuth, signInAnonymously } from "firebase/auth";
@@ -30,11 +32,11 @@ const SHOP_ITEMS = [
   // Headware
   { id: 'baseball_cap', name: 'Baseball Cap', type: 'headware', price: 15, thumb: '/assets/headware/baseball_cap_tn.png', overlay: '/assets/headware/baseball_cap.png' },
   { id: 'butterfly_clip', name: 'Butterfly Clip', type: 'headware', price: 10, thumb: '/assets/headware/butterfly_clip_tn.png', overlay: '/assets/headware/butterfly_clip.png' },
-  { id: 'pucca_buns', name: 'Pucca Buns', type: 'headware', price: 30, thumb: '/assets/headware/pucca_buns_tn.png', overlay: '/assets/headware/pucca_buns.png' },
   { id: 'rocker_hair', name: 'Rocker Hair', type: 'headware', price: 35, thumb: '/assets/headware/rocker_hair_tn.png', overlay: '/assets/headware/rocker_hair.png' },
   { id: 'unicorn_horn', name: 'Unicorn Horn', type: 'headware', price: 50, thumb: '/assets/headware/unicorn_horn_tn.png', overlay: '/assets/headware/unicorn_horn.png' },
 
-  // Neckware
+  // Neckware (Pucca moved here)
+  { id: 'pucca', name: 'Pucca', type: 'neckware', price: 30, thumb: '/assets/neckware/pucca_tn.png', overlay: '/assets/neckware/pucca.png' },
   { id: 'fancy_necklace', name: 'Fancy Necklace', type: 'neckware', price: 25, thumb: '/assets/neckware/fancy_necklace_tn.png', overlay: '/assets/neckware/fancy_necklace.png' },
   { id: 'locket', name: 'Gold Locket', type: 'neckware', price: 15, thumb: '/assets/neckware/locket_tn.png', overlay: '/assets/neckware/locket.png' },
 
@@ -51,19 +53,21 @@ const SHOP_ITEMS = [
 ];
 
 const COAT_COLORS = [
-  { id: 'white', name: 'Cloud White', price: 0, img: '/assets/horses/white_horse.png' },
-  { id: 'brown', name: 'Chestnut Brown', price: 100, img: '/assets/horses/brown_horse.png' },
-  { id: 'blue', name: 'Mystic Blue', price: 250, img: '/assets/horses/blue_horse.png' },
+  { id: 'white', name: 'Cloud White', price: 0, img: '/assets/horses/white.png' },
+  { id: 'brown', name: 'Chestnut Brown', price: 100, img: '/assets/horses/brown.png' },
+  { id: 'blue', name: 'Mystic Blue', price: 250, img: '/assets/horses/blue.png' },
 ];
 
 const INITIAL_TASKS = [
-  { id: 1, title: "Q3 Financial Report", type: "Deep Work", reward_hay: 200, reward_stat: "stamina" }, 
-  { id: 2, title: "Client Email Sync", type: "Admin", reward_hay: 50, reward_stat: "speed" }
+  { id: 'init_1', title: "Join the Team", type: "Onboarding", reward_hay: 50, reward_stat: "stamina", isMain: false }
 ];
 
 const INITIAL_TOWN = [
   { id: 'chat_barn', name: 'Chat Barn', cost: 300, current: 0, icon: '💬', description: 'Unlocks Team Chat', unlocked: false },
-  { id: 'salon', name: 'The Mane Salon', cost: 500, current: 0, icon: '✂️', description: 'Unlocks Coat Colors', unlocked: false }
+  { id: 'salon', name: 'The Mane Salon', cost: 500, current: 0, icon: '✂️', description: 'Unlocks Coat Colors', unlocked: false },
+  { id: 'library', name: 'The Library', cost: 600, current: 0, icon: '📚', description: 'Unlocks Strategy Tips', unlocked: false },
+  { id: 'gym', name: 'Iron Horse Gym', cost: 800, current: 0, icon: '🏋️', description: 'Unlocks Stat Boosts', unlocked: false },
+  { id: 'racetrack', name: 'Derby Track', cost: 1000, current: 0, icon: '🏁', description: 'Unlocks Weekly Race', unlocked: false },
 ];
 
 const DEFAULT_USER_STATE = {
@@ -72,7 +76,7 @@ const DEFAULT_USER_STATE = {
   inventory: [], ownedCoats: ['white'], horseColor: 'white',
   equipped: { headware: null, neckware: null, shoes: null, accessories: null },
   activeTasks: INITIAL_TASKS, digestingTask: null,
-  role: 'jockey' // Default role
+  role: 'jockey' 
 };
 
 // --- COMPONENTS ---
@@ -103,9 +107,14 @@ export default function StableGoals() {
   const [view, setView] = useState('work'); 
   const [userData, setUserData] = useState(null);
   const [townData, setTownData] = useState(null);
-  const [teamMembers, setTeamMembers] = useState([]); // For Managers
+  const [teamMembers, setTeamMembers] = useState([]); 
   const [showWellness, setShowWellness] = useState(false);
   const [shopFilter, setShopFilter] = useState('all');
+  
+  // Manager State
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [raceMode, setRaceMode] = useState(false);
+  const [raceResults, setRaceResults] = useState(null);
 
   useEffect(() => {
     const initApp = async () => {
@@ -129,51 +138,35 @@ export default function StableGoals() {
 
     setLoading(true);
 
-    // 1. Setup User
     const userRef = doc(db, "users", userDocId);
     const userSnap = await getDoc(userRef);
 
     if (!userSnap.exists()) {
-      await setDoc(userRef, { 
-        ...DEFAULT_USER_STATE, 
-        name, 
-        teamCode: safeCode, 
-        role 
-      });
+      await setDoc(userRef, { ...DEFAULT_USER_STATE, name, teamCode: safeCode, role });
     }
 
-    // 2. Setup Town (Create if Manager, Read if Jockey)
     const townRef = doc(db, "towns", townDocId);
     const townSnap = await getDoc(townRef);
     if (!townSnap.exists()) {
-      await setDoc(townRef, { 
-        buildings: INITIAL_TOWN, 
-        stableName: stableName 
-      });
+      await setDoc(townRef, { buildings: INITIAL_TOWN, stableName: stableName });
     }
 
-    // 3. Listeners
     onSnapshot(userRef, (doc) => setUserData(doc.data()));
     onSnapshot(townRef, (doc) => setTownData(doc.data()));
 
-    // 4. If Manager, listen to all team members
-    // We use a query to get everyone with the same teamCode
     const q = query(collection(db, "users"), where("teamCode", "==", safeCode));
     onSnapshot(q, (snapshot) => {
-      const members = snapshot.docs.map(doc => doc.data());
+      const members = snapshot.docs.map(d => ({...d.data(), id: d.id}));
       setTeamMembers(members);
     });
 
-    // 5. Save Session
     const sessionData = { name, teamCode: safeCode, docId: userDocId, townDocId };
     setSession(sessionData);
     localStorage.setItem('stable_goals_creds', JSON.stringify({ name, teamCode: safeCode }));
     
-    // Only show wellness if JOCKEY and not checked in
     if ((!userSnap.exists() || !userSnap.data().stats?.mood) && role !== 'manager') {
       setShowWellness(true);
     }
-    
     setLoading(false);
   };
 
@@ -182,7 +175,7 @@ export default function StableGoals() {
     setSession(null); setUserData(null); setTownData(null); setTeamMembers([]);
   };
 
-  // --- ACTIONS (Jockey) ---
+  // --- ACTIONS ---
   const feedHorse = async (task) => {
     if (userData.digestingTask) return;
     const taskData = { ...task, startTime: Date.now(), duration: 3000 };
@@ -213,18 +206,14 @@ export default function StableGoals() {
   const buyItem = async (item) => {
     if (userData.currency.sugar >= item.price) {
       const userRef = doc(db, "users", session.docId);
-      await updateDoc(userRef, {
-        "currency.sugar": increment(-item.price), inventory: arrayUnion(item.id)
-      });
+      await updateDoc(userRef, { "currency.sugar": increment(-item.price), inventory: arrayUnion(item.id) });
     }
   };
 
   const buyCoat = async (coat) => {
     if (userData.currency.sugar >= coat.price) {
       const userRef = doc(db, "users", session.docId);
-      await updateDoc(userRef, {
-        "currency.sugar": increment(-coat.price), ownedCoats: arrayUnion(coat.id), horseColor: coat.id
-      });
+      await updateDoc(userRef, { "currency.sugar": increment(-coat.price), ownedCoats: arrayUnion(coat.id), horseColor: coat.id });
     }
   };
 
@@ -256,6 +245,40 @@ export default function StableGoals() {
     setShowWellness(false);
   };
 
+  const assignGoal = async (e) => {
+    e.preventDefault();
+    const d = new FormData(e.target);
+    const mainTitle = d.get('mainGoal');
+    const sub1 = d.get('sub1');
+    const sub2 = d.get('sub2');
+    const sub3 = d.get('sub3');
+
+    const newTasks = [
+      { id: Date.now() + '_main', title: mainTitle, type: 'Main Focus', reward_hay: 200, reward_stat: 'stamina', isMain: true }
+    ];
+    if (sub1) newTasks.push({ id: Date.now() + '_s1', title: sub1, type: 'Subtask', reward_hay: 50, reward_stat: 'speed', isMain: false });
+    if (sub2) newTasks.push({ id: Date.now() + '_s2', title: sub2, type: 'Subtask', reward_hay: 50, reward_stat: 'speed', isMain: false });
+    if (sub3) newTasks.push({ id: Date.now() + '_s3', title: sub3, type: 'Subtask', reward_hay: 50, reward_stat: 'speed', isMain: false });
+
+    const memberRef = doc(db, "users", selectedMember.id);
+    // In real app, use arrayUnion, but here we just append to avoid overwrite logic complexity
+    const currentTasks = selectedMember.activeTasks || [];
+    await updateDoc(memberRef, { activeTasks: [...currentTasks, ...newTasks] });
+    setSelectedMember(null);
+  };
+
+  const runRace = () => {
+    // Simple simulation based on stats
+    const results = teamMembers
+      .filter(m => m.role !== 'manager')
+      .map(m => ({
+        ...m,
+        score: (m.stats.speed * 2) + m.stats.stamina + Math.random() * 10
+      }))
+      .sort((a, b) => b.score - a.score);
+    setRaceResults(results);
+  };
+
   const getEquippedOverlay = (user, type) => {
     const itemId = user.equipped?.[type];
     if (!itemId) return null;
@@ -273,71 +296,154 @@ export default function StableGoals() {
     const moods = teamMembers.map(m => m.stats?.mood).filter(Boolean);
     const moodCounts = { fire: 0, happy: 0, ok: 0, tired: 0 };
     moods.forEach(m => moodCounts[m] = (moodCounts[m] || 0) + 1);
-    const totalHay = teamMembers.reduce((acc, m) => acc + (m.currency?.hay || 0), 0);
-
+    
     return (
-      <div className="min-h-screen bg-[#F0F4F8] font-sans text-slate-800 p-8">
-        <header className="flex justify-between items-center mb-8">
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-800 p-8">
+        <header className="flex justify-between items-center mb-8 bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
            <div>
              <h1 className="text-3xl font-black text-slate-800">{townData.stableName || "My Stable"}</h1>
-             <div className="text-slate-400 font-bold">Manager Dashboard • Code: <span className="bg-slate-200 px-2 py-1 rounded text-slate-600 font-mono">{userData.teamCode}</span></div>
+             <div className="text-slate-400 font-bold flex items-center gap-2">
+                <span className="bg-slate-100 px-3 py-1 rounded-lg text-slate-500 font-mono text-sm">Code: {userData.teamCode}</span>
+             </div>
            </div>
-           <button onClick={handleLogout} className="flex items-center gap-2 text-rose-500 font-bold hover:bg-rose-50 px-4 py-2 rounded-xl transition-colors"><LogOut size={20} /> Logout</button>
+           <div className="flex gap-3">
+             <button onClick={() => { setRaceMode(true); runRace(); }} className="flex items-center gap-2 bg-amber-400 hover:bg-amber-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-lg shadow-amber-200">
+                <Flag size={20} /> Run Race
+             </button>
+             <button onClick={handleLogout} className="flex items-center gap-2 text-rose-500 font-bold hover:bg-rose-50 px-4 py-2 rounded-xl transition-colors"><LogOut size={20} /></button>
+           </div>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-           {/* Card 1: Vibe Check */}
-           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-              <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider"><Activity size={16} /> Stable Vibe</div>
-              <div className="flex justify-between items-end">
-                 <div className="text-center"><div className="text-3xl">🔥</div><div className="font-bold text-slate-600">{moodCounts.fire}</div></div>
-                 <div className="text-center"><div className="text-3xl">😄</div><div className="font-bold text-slate-600">{moodCounts.happy}</div></div>
-                 <div className="text-center"><div className="text-3xl">😐</div><div className="font-bold text-slate-600">{moodCounts.ok}</div></div>
-                 <div className="text-center"><div className="text-3xl">😴</div><div className="font-bold text-slate-600">{moodCounts.tired}</div></div>
-              </div>
-           </div>
-
-           {/* Card 2: Productivity */}
-           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-              <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider"><TrendingUp size={16} /> Total Production</div>
-              <div className="text-5xl font-black text-amber-500">{totalHay} <span className="text-2xl text-amber-300">Hay</span></div>
-              <div className="text-sm text-slate-400 mt-2">Team contributions to town</div>
-           </div>
-
-           {/* Card 3: Team Size */}
-           <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-              <div className="flex items-center gap-2 mb-4 text-slate-400 font-bold uppercase text-xs tracking-wider"><Users size={16} /> Active Jockeys</div>
-              <div className="text-5xl font-black text-sky-500">{teamMembers.length}</div>
-              <div className="text-sm text-slate-400 mt-2">Members in stable</div>
-           </div>
-        </div>
-
-        <h2 className="text-xl font-black text-slate-700 mb-4">Team Roster</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-           {teamMembers.map((member, idx) => (
-             <div key={idx} className="bg-white p-4 rounded-3xl border-2 border-slate-100 flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-sky-50 flex items-center justify-center relative overflow-hidden border border-sky-100">
-                   {/* Mini Horse Preview */}
-                   <img src={`/assets/horses/${member.horseColor || 'white'}_horse.png`} className="absolute w-full h-full object-contain" />
-                </div>
-                <div className="flex-1">
-                   <div className="flex justify-between">
-                     <div className="font-bold text-slate-700">{member.name}</div>
-                     {member.role === 'manager' && <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold uppercase">MGR</span>}
-                   </div>
-                   <div className="flex gap-2 mt-1 text-xs font-bold text-slate-400">
-                      <span className="flex items-center gap-1"><Zap size={10} /> {member.stats?.speed || 0}</span>
-                      <span className="flex items-center gap-1"><Activity size={10} /> {member.stats?.stamina || 0}</span>
-                   </div>
-                </div>
-                {member.stats?.mood && (
-                  <div className="text-2xl" title={member.stats.mood}>
-                    {member.stats.mood === 'fire' ? '🔥' : member.stats.mood === 'happy' ? '😄' : member.stats.mood === 'ok' ? '😐' : '😴'}
-                  </div>
-                )}
+        {raceMode ? (
+          <div className="bg-slate-900 text-white p-8 rounded-[2.5rem] shadow-2xl relative overflow-hidden min-h-[60vh]">
+             <div className="flex justify-between items-center mb-8 relative z-10">
+                <h2 className="text-4xl font-black italic tracking-tighter text-amber-400">Weekly Gallop Results</h2>
+                <button onClick={() => { setRaceMode(false); setRaceResults(null); }} className="bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl font-bold backdrop-blur">Close Race</button>
              </div>
-           ))}
-        </div>
+             
+             <div className="space-y-6 relative z-10">
+                {raceResults?.map((r, i) => (
+                  <div key={r.id} className="flex items-center gap-4 animate-in slide-in-from-left duration-700" style={{ animationDelay: `${i * 100}ms` }}>
+                     <div className="text-3xl font-black w-12 text-slate-500">#{i+1}</div>
+                     <div className="flex-1 bg-slate-800/50 rounded-2xl p-2 flex items-center gap-4 pr-6 border border-slate-700">
+                        <div className="w-12 h-12 bg-white rounded-xl overflow-hidden relative">
+                           <img src={`/assets/horses/${r.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
+                        </div>
+                        <div className="flex-1">
+                           <div className="font-bold text-lg">{r.name}</div>
+                           <div className="h-2 bg-slate-700 rounded-full overflow-hidden mt-1">
+                              <div className="h-full bg-gradient-to-r from-amber-400 to-rose-500" style={{ width: `${Math.min(r.score, 100)}%` }}></div>
+                           </div>
+                        </div>
+                        <div className="text-right">
+                           <div className="text-xs text-slate-400 font-bold uppercase">Score</div>
+                           <div className="font-mono text-xl text-amber-400">{Math.floor(r.score)}</div>
+                        </div>
+                     </div>
+                  </div>
+                ))}
+             </div>
+             <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/asphalt-dark.png')]"></div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100 flex flex-col justify-between">
+                  <div className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Team Mood</div>
+                  <div className="flex justify-between text-2xl">
+                    <span title="On Fire">🔥 {moodCounts.fire}</span>
+                    <span title="Happy">😄 {moodCounts.happy}</span>
+                    <span title="Okay">😐 {moodCounts.ok}</span>
+                    <span title="Tired">😴 {moodCounts.tired}</span>
+                  </div>
+              </div>
+              <div className="md:col-span-3 bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+                  <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-4">Quick Actions</h3>
+                  <div className="flex gap-4">
+                     <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-xl font-bold text-sm border border-emerald-100">
+                        Assign Goals: Click a member below
+                     </div>
+                     <div className="bg-purple-50 text-purple-700 px-4 py-2 rounded-xl font-bold text-sm border border-purple-100">
+                        Manage Town: {townData.buildings.filter(b => b.unlocked).length} / {townData.buildings.length} Unlocked
+                     </div>
+                  </div>
+              </div>
+            </div>
+
+            <h2 className="text-xl font-black text-slate-700 mb-4">Active Roster ({teamMembers.length})</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {teamMembers.map((member) => (
+                <div key={member.id} 
+                     onClick={() => member.role !== 'manager' && setSelectedMember(member)}
+                     className={`bg-white p-4 rounded-3xl border-2 transition-all cursor-pointer group relative overflow-hidden ${selectedMember?.id === member.id ? 'border-sky-400 ring-4 ring-sky-100' : 'border-slate-100 hover:border-sky-200'}`}
+                >
+                    <div className="flex items-center gap-4 relative z-10">
+                      <div className="w-20 h-20 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center relative overflow-hidden">
+                          <img src={`/assets/horses/${member.horseColor || 'white'}.png`} className="absolute w-full h-full object-contain" />
+                          {/* Basic overlay preview for manager */}
+                          {getEquippedOverlay(member, 'headware') && <img src={getEquippedOverlay(member, 'headware')} className="absolute w-full h-full object-contain z-20" />}
+                      </div>
+                      <div className="flex-1">
+                          <div className="flex justify-between items-start">
+                            <div className="font-bold text-lg text-slate-700">{member.name}</div>
+                            {member.role === 'manager' && <span className="text-[10px] bg-purple-100 text-purple-600 px-2 py-0.5 rounded-full font-bold uppercase">MGR</span>}
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                             <div className="bg-amber-50 rounded-lg px-2 py-1">
+                                <div className="text-[10px] font-bold text-amber-400 uppercase">Speed</div>
+                                <div className="font-black text-amber-700">{member.stats?.speed || 0}</div>
+                             </div>
+                             <div className="bg-rose-50 rounded-lg px-2 py-1">
+                                <div className="text-[10px] font-bold text-rose-400 uppercase">Stamina</div>
+                                <div className="font-black text-rose-700">{member.stats?.stamina || 0}</div>
+                             </div>
+                          </div>
+                      </div>
+                    </div>
+                    {member.role !== 'manager' && (
+                      <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center text-xs font-bold text-slate-400 group-hover:text-sky-500">
+                         <span>Active Tasks: {member.activeTasks?.length || 0}</span>
+                         <span className="flex items-center gap-1">Assign Goal <PlusCircle size={14} /></span>
+                      </div>
+                    )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {/* ASSIGN GOAL MODAL */}
+        {selectedMember && (
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+             <div className="bg-white w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl animate-in zoom-in-95">
+                <div className="flex justify-between items-center mb-6">
+                   <div>
+                      <h3 className="text-2xl font-black text-slate-800">Assign Goals</h3>
+                      <p className="text-slate-400 font-bold">for {selectedMember.name}</p>
+                   </div>
+                   <button onClick={() => setSelectedMember(null)} className="bg-slate-100 p-2 rounded-full hover:bg-slate-200"><X size={20} /></button>
+                </div>
+                
+                <form onSubmit={assignGoal} className="space-y-4">
+                   <div>
+                      <label className="text-xs font-bold text-emerald-600 uppercase ml-2 mb-1 block">Main Focus (+200 Hay)</label>
+                      <input name="mainGoal" placeholder="e.g. Finish Q3 Report" className="w-full bg-emerald-50 border-2 border-emerald-100 rounded-xl px-4 py-3 font-bold text-emerald-900 placeholder-emerald-300 focus:outline-none focus:border-emerald-400" required />
+                   </div>
+                   
+                   <div className="space-y-2">
+                      <label className="text-xs font-bold text-slate-400 uppercase ml-2 block">Subtasks (+50 Hay)</label>
+                      <input name="sub1" placeholder="Subtask 1" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
+                      <input name="sub2" placeholder="Subtask 2" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
+                      <input name="sub3" placeholder="Subtask 3" className="w-full bg-slate-50 border-2 border-slate-100 rounded-xl px-4 py-2 text-sm font-medium focus:outline-none focus:border-sky-300" />
+                   </div>
+
+                   <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-xl shadow-lg shadow-emerald-200 mt-4 transition-all">
+                      Confirm Assignment
+                   </button>
+                </form>
+             </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -363,7 +469,7 @@ export default function StableGoals() {
         <section className="lg:col-span-5 relative bg-gradient-to-b from-sky-100 to-sky-50 flex flex-col border-r-2 border-slate-200">
           <div className="flex-1 relative flex items-center justify-center p-8">
             <div className="relative z-10 w-[300px] h-[300px] flex items-center justify-center">
-              <img src={`/assets/horses/${userData.horseColor || 'white'}_horse.png`} alt="Horse" className="absolute w-full h-full object-contain z-10" />
+              <img src={`/assets/horses/${userData.horseColor || 'white'}.png`} alt="Horse" className="absolute w-full h-full object-contain z-10" />
               {getEquippedOverlay(userData, 'shoes') && <img src={getEquippedOverlay(userData, 'shoes')} className="absolute w-full h-full object-contain z-20" />}
               {getEquippedOverlay(userData, 'neckware') && <img src={getEquippedOverlay(userData, 'neckware')} className="absolute w-full h-full object-contain z-30" />}
               {getEquippedOverlay(userData, 'headware') && <img src={getEquippedOverlay(userData, 'headware')} className="absolute w-full h-full object-contain z-40" />}
@@ -384,21 +490,50 @@ export default function StableGoals() {
           <div className="flex-1 overflow-y-auto px-8 pb-8">
             {view === 'work' && (
               <div className="space-y-4">
-                {userData.activeTasks.map(task => (
-                  <div key={task.id} className="bg-white p-5 rounded-2xl border-2 border-slate-100 flex justify-between items-center hover:border-emerald-300">
-                    <div><div className="font-bold text-slate-700 text-lg">{task.title}</div><div className="text-emerald-600 font-bold text-xs mt-1">+{task.reward_hay} Hay</div></div>
-                    <GameButton onClick={() => feedHorse(task)} color="white" disabled={!!userData.digestingTask}>🍎</GameButton>
+                {userData.activeTasks.length > 0 ? userData.activeTasks.map(task => (
+                  <div key={task.id} className={`bg-white p-5 rounded-2xl border-2 flex justify-between items-center hover:shadow-md transition-shadow ${task.isMain ? 'border-emerald-200 bg-emerald-50/30' : 'border-slate-100'}`}>
+                    <div>
+                        <div className="flex items-center gap-2">
+                           {task.isMain && <Star size={16} className="text-amber-400 fill-amber-400" />}
+                           <div className="font-bold text-slate-700 text-lg">{task.title}</div>
+                        </div>
+                        <div className={`${task.isMain ? 'text-emerald-600' : 'text-slate-400'} font-bold text-xs mt-1 flex items-center gap-1`}>
+                           <span className="uppercase">{task.type}</span> • +{task.reward_hay} Hay
+                        </div>
+                    </div>
+                    <GameButton onClick={() => feedHorse(task)} color={task.isMain ? "emerald" : "white"} disabled={!!userData.digestingTask}>🍎</GameButton>
                   </div>
-                ))}
+                )) : (
+                  <div className="text-center py-20 bg-white rounded-[2.5rem] border-4 border-dashed border-slate-200">
+                     <div className="text-6xl mb-4 grayscale opacity-30">🥕</div>
+                     <div className="text-slate-400 font-bold">No Active Tasks</div>
+                     <div className="text-slate-300 text-sm">Ask your manager to assign goals!</div>
+                  </div>
+                )}
               </div>
             )}
             {view === 'town' && (
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-6">
                   {townData.buildings.map(b => (
-                    <div key={b.id} className={`p-6 rounded-3xl border-b-8 ${b.unlocked ? 'bg-white' : 'bg-slate-100'}`}>
-                      <div className="flex justify-between items-start mb-4"><span className="text-4xl">{b.icon}</span>{b.unlocked && <CheckCircle className="text-emerald-500" />}</div>
-                      <h3 className="font-black text-slate-700">{b.name}</h3>
-                      {!b.unlocked ? <GameButton onClick={() => contributeToTown(b.id)} color="blue" className="w-full mt-4 text-sm">Contribute 50</GameButton> : <GameButton onClick={() => b.id === 'salon' ? setView('salon') : null} color="white" className="w-full mt-4 text-sm">Enter</GameButton>}
+                    <div key={b.id} className={`p-6 rounded-3xl border-b-8 relative overflow-hidden ${b.unlocked ? 'bg-white border-slate-200' : 'bg-slate-100 border-slate-200'}`}>
+                      <div className="flex justify-between items-start mb-4 relative z-10">
+                         <div className="flex items-center gap-4">
+                            <span className="text-4xl">{b.icon}</span>
+                            <div>
+                               <h3 className="font-black text-slate-700 text-lg">{b.name}</h3>
+                               <p className="text-slate-400 text-xs font-bold uppercase">{b.description}</p>
+                            </div>
+                         </div>
+                         {b.unlocked ? <CheckCircle className="text-emerald-500" /> : <div className="text-xs font-black text-slate-400 bg-slate-200 px-2 py-1 rounded">{b.current}/{b.cost}</div>}
+                      </div>
+                      {!b.unlocked ? (
+                        <div className="relative z-10">
+                           <div className="h-3 bg-slate-200 rounded-full overflow-hidden mb-4">
+                              <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${(b.current / b.cost) * 100}%` }}></div>
+                           </div>
+                           <GameButton onClick={() => contributeToTown(b.id)} color="blue" className="w-full mt-2 text-sm">Contribute 50 Hay</GameButton>
+                        </div>
+                      ) : <GameButton onClick={() => b.id === 'salon' ? setView('salon') : null} color="white" className="w-full mt-4 text-sm relative z-10">Enter Building</GameButton>}
                     </div>
                   ))}
               </div>
@@ -448,7 +583,7 @@ export default function StableGoals() {
 }
 
 const LoginScreen = ({ onLogin }) => {
-  const [tab, setTab] = useState('join'); // 'join' or 'create'
+  const [tab, setTab] = useState('join'); 
   
   const handleCreate = (e) => {
     e.preventDefault();
@@ -480,7 +615,6 @@ const LoginScreen = ({ onLogin }) => {
           <h1 className="text-4xl font-black text-white tracking-tight">Stable Goals</h1>
         </div>
 
-        {/* TABS */}
         <div className="flex border-b-2 border-slate-100">
           <button onClick={() => setTab('join')} className={`flex-1 py-4 font-black text-sm uppercase tracking-wide transition-colors ${tab === 'join' ? 'text-sky-500 border-b-4 border-sky-500' : 'text-slate-400 hover:text-slate-600'}`}>Join Team</button>
           <button onClick={() => setTab('create')} className={`flex-1 py-4 font-black text-sm uppercase tracking-wide transition-colors ${tab === 'create' ? 'text-amber-500 border-b-4 border-amber-500' : 'text-slate-400 hover:text-slate-600'}`}>Create Stable</button>
